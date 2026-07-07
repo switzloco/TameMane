@@ -1,0 +1,16 @@
+{
+  "short_name": "TameMane",
+  "name": "TameMane Household Ops",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0b0f19",
+  "background_color": "#0b0f19"
+}
