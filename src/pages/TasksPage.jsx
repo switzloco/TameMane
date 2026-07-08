@@ -9,6 +9,7 @@ export default function TasksPage({ activeProperty }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('open'); // 'all' | 'open' | 'completed'
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -16,6 +17,7 @@ export default function TasksPage({ activeProperty }) {
   const [priority, setPriority] = useState('medium');
   const [category, setCategory] = useState('repairs');
   const [dueDate, setDueDate] = useState('');
+  const [blockedBy, setBlockedBy] = useState('');
 
   const loadTasks = async () => {
     if (!activeProperty) return;
@@ -51,27 +53,47 @@ export default function TasksPage({ activeProperty }) {
     }
   };
 
-  const handleAddTask = async (e) => {
-    e.preventDefault();
-    const newTask = {
-      propertyId: activeProperty.id,
-      title,
-      description,
-      status: 'open',
-      priority,
-      category,
-      dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-      notes: '',
-      source: 'manual',
-    };
-    await dbService.saveTask(newTask);
-    setShowAddModal(false);
-    // Reset Form
+  const handleOpenAddModal = () => {
+    setEditingTask(null);
     setTitle('');
     setDescription('');
     setPriority('medium');
     setCategory('repairs');
     setDueDate('');
+    setBlockedBy('');
+    setShowAddModal(true);
+  };
+
+  const handleOpenEditModal = (task) => {
+    setEditingTask(task);
+    setTitle(task.title || '');
+    setDescription(task.description || '');
+    setPriority(task.priority || 'medium');
+    setCategory(task.category || 'repairs');
+    setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
+    setBlockedBy(task.blockedBy && task.blockedBy.length > 0 ? task.blockedBy[0] : '');
+    setShowAddModal(true);
+  };
+
+  const handleSaveTask = async (e) => {
+    e.preventDefault();
+    const taskData = {
+      propertyId: activeProperty.id,
+      title,
+      description,
+      status: editingTask ? editingTask.status : 'open',
+      priority,
+      category,
+      blockedBy: blockedBy ? [blockedBy] : [],
+      dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+      notes: editingTask ? editingTask.notes : '',
+      source: editingTask ? editingTask.source : 'manual',
+    };
+    if (editingTask) {
+      taskData.id = editingTask.id;
+    }
+    await dbService.saveTask(taskData);
+    setShowAddModal(false);
     loadTasks();
   };
 
@@ -80,6 +102,8 @@ export default function TasksPage({ activeProperty }) {
     if (filter === 'completed') return task.status === 'completed';
     return true;
   });
+
+  const otherTasks = tasks.filter(t => t.id !== editingTask?.id);
 
   return (
     <div className="flex flex-col gap-4 pb-8">
@@ -90,7 +114,7 @@ export default function TasksPage({ activeProperty }) {
           <p className="text-xs text-slate-400 mt-0.5">{tasks.length} tasks recorded</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={handleOpenAddModal}
           className="p-2.5 rounded-2xl bg-blue-600 active:scale-95 transition-all text-white flex items-center gap-1.5 shadow-lg shadow-blue-500/20"
         >
           <Plus size={18} />
@@ -132,27 +156,31 @@ export default function TasksPage({ activeProperty }) {
             <TaskCard 
               key={task.id} 
               task={task} 
+              allTasks={tasks}
               onToggleStatus={handleToggleStatus}
+              onEdit={handleOpenEditModal}
               onDelete={handleDeleteTask}
             />
           ))}
         </div>
       )}
 
-      {/* Add Task Modal */}
+      {/* Add / Edit Task Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
           
-          <div className="relative w-full max-w-md bg-dark-card border border-slate-700/60 rounded-3xl p-5 shadow-2xl z-10 animate-slide-up">
+          <div className="relative w-full max-w-md bg-dark-card border border-slate-700/60 rounded-3xl p-5 shadow-2xl z-10 max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex items-center justify-between border-b border-dark-border pb-3 mb-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Add New Task</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                {editingTask ? 'Edit Task Details' : 'Add New Task'}
+              </h3>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white p-1">
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleAddTask} className="flex flex-col gap-3">
+            <form onSubmit={handleSaveTask} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-400">Task Title</label>
                 <input 
@@ -205,6 +233,21 @@ export default function TasksPage({ activeProperty }) {
                 </div>
               </div>
 
+              {/* Prerequisite (Blocker) */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-400">Prerequisite (Blocker)</label>
+                <select
+                  value={blockedBy}
+                  onChange={(e) => setBlockedBy(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-2xl text-white text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">None — Task is ready to start</option>
+                  {otherTasks.map(t => (
+                    <option key={t.id} value={t.id}>{t.title} ({t.status})</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-slate-400">Due Date</label>
                 <input 
@@ -219,7 +262,7 @@ export default function TasksPage({ activeProperty }) {
                 type="submit"
                 className="w-full py-3 mt-2 text-sm font-semibold rounded-2xl bg-blue-600 hover:bg-blue-500 text-white shadow-lg active:scale-95 transition-all"
               >
-                Create Task
+                {editingTask ? 'Save Changes' : 'Create Task'}
               </button>
             </form>
           </div>

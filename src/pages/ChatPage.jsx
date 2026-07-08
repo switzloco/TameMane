@@ -134,6 +134,22 @@ export default function ChatPage({ activeProperty }) {
             text: `🛠️ Task created: "${created.title}" under property "${activeProperty.name}".`
           }
         ]);
+      } else if (type === 'update_task') {
+        const taskPayload = actionBlock.task || actionBlock;
+        if (taskPayload.id) {
+          const updated = await dbService.saveTask(taskPayload);
+          
+          // Append system notification message
+          setMessages(prev => [
+            ...prev,
+            {
+              id: `sys_${Date.now()}_task_update_${updated.id}`,
+              role: 'model',
+              isSystem: true,
+              text: `🔄 Task updated: "${updated.title}" (Status: ${updated.status || 'unchanged'}).`
+            }
+          ]);
+        }
       } else if (type === 'create_transaction') {
         const txPayload = actionBlock.transaction || actionBlock;
         const seedTx = {

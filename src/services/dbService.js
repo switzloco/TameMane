@@ -70,12 +70,18 @@ export const dbService = {
     let savedTask;
 
     if (index >= 0) {
-      savedTask = { ...tasks[index], ...task, updatedAt: new Date().toISOString() };
+      savedTask = { 
+        ...tasks[index], 
+        ...task, 
+        blockedBy: task.blockedBy || tasks[index].blockedBy || [],
+        updatedAt: new Date().toISOString() 
+      };
       tasks[index] = savedTask;
     } else {
       savedTask = {
         ...task,
         id: task.id || `task_${Date.now()}`,
+        blockedBy: task.blockedBy || [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
