@@ -18,6 +18,7 @@ export default function TasksPage({ activeProperty }) {
   const [category, setCategory] = useState('repairs');
   const [dueDate, setDueDate] = useState('');
   const [blockedBy, setBlockedBy] = useState('');
+  const [status, setStatus] = useState('open');
 
   const loadTasks = async () => {
     if (!activeProperty) return;
@@ -61,6 +62,7 @@ export default function TasksPage({ activeProperty }) {
     setCategory('repairs');
     setDueDate('');
     setBlockedBy('');
+    setStatus('open');
     setShowAddModal(true);
   };
 
@@ -72,6 +74,7 @@ export default function TasksPage({ activeProperty }) {
     setCategory(task.category || 'repairs');
     setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
     setBlockedBy(task.blockedBy && task.blockedBy.length > 0 ? task.blockedBy[0] : '');
+    setStatus(task.status || 'open');
     setShowAddModal(true);
   };
 
@@ -81,7 +84,7 @@ export default function TasksPage({ activeProperty }) {
       propertyId: activeProperty.id,
       title,
       description,
-      status: editingTask ? editingTask.status : 'open',
+      status: status,
       priority,
       category,
       blockedBy: blockedBy ? [blockedBy] : [],
@@ -245,6 +248,20 @@ export default function TasksPage({ activeProperty }) {
                   {otherTasks.map(t => (
                     <option key={t.id} value={t.id}>{t.title} ({t.status})</option>
                   ))}
+                </select>
+              </div>
+
+              {/* Status Selector (Only shown when editing or optionally always, we show it always now for control) */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-400">Task Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-2xl text-white text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="open">Open (Active)</option>
+                  <option value="completed">Completed</option>
+                  <option value="deferred">Deferred / Paused</option>
                 </select>
               </div>
 
