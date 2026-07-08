@@ -9,13 +9,38 @@ export default function ChatPage({ activeProperty }) {
     {
       id: 'welcome',
       role: 'model',
-      text: "Hi Nick! I'm TameMane PM. I have loaded the portfolio context. You can ask me to create tasks, categorize transactions, or ask tax-related questions (e.g. 'I just spent $500 on carpet cleaning for Quinto. How should I classify it?')."
+      text: "Hi Nick! I'm TameMane PM. I have loaded the portfolio context. You can ask me to create tasks, categorize transactions, or ask tax-related questions."
     }
   ]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef(null);
+
+  // Load chat history when active property changes
+  useEffect(() => {
+    if (activeProperty) {
+      const saved = localStorage.getItem(`tm_chat_history_${activeProperty.id}`);
+      if (saved) {
+        setMessages(JSON.parse(saved));
+      } else {
+        setMessages([
+          {
+            id: 'welcome',
+            role: 'model',
+            text: `Hi Nick! I'm TameMane PM. I have loaded the portfolio context for ${activeProperty.name}. You can ask me to create tasks, categorize transactions, or ask tax-related questions.`
+          }
+        ]);
+      }
+    }
+  }, [activeProperty]);
+
+  // Save chat history to localStorage when messages update
+  useEffect(() => {
+    if (activeProperty && messages.length > 0) {
+      localStorage.setItem(`tm_chat_history_${activeProperty.id}`, JSON.stringify(messages));
+    }
+  }, [messages, activeProperty]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
