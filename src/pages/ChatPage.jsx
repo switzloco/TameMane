@@ -63,8 +63,10 @@ export default function ChatPage({ activeProperty }) {
       setMessages(prev => [...prev, { id: modelMsgId, role: 'model', text: response.text }]);
 
       // 5. Handle action execution
-      if (response.action) {
-        await executeAgentAction(response.action);
+      if (response.actions && response.actions.length > 0) {
+        for (const act of response.actions) {
+          await executeAgentAction(act);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -83,12 +85,15 @@ export default function ChatPage({ activeProperty }) {
 
   const executeAgentAction = async (actionBlock) => {
     try {
-      if (actionBlock.action === 'create_task') {
+      const type = actionBlock.type || actionBlock.action;
+      
+      if (type === 'create_task') {
+        const taskPayload = actionBlock.task || actionBlock;
         const seedTask = {
-          ...actionBlock.task,
+          ...taskPayload,
           propertyId: activeProperty.id,
           status: 'open',
-          dueDate: actionBlock.task.dueDate || new Date(Date.now() + 7*24*60*60*1000).toISOString(),
+          dueDate: taskPayload.dueDate || new Date(Date.now() + 7*24*60*60*1000).toISOString(),
           notes: 'Created via AI Chat',
           source: 'gemini_triage',
         };
@@ -98,21 +103,22 @@ export default function ChatPage({ activeProperty }) {
         setMessages(prev => [
           ...prev,
           {
-            id: `sys_${Date.now()}`,
+            id: `sys_${Date.now()}_task_${created.id}`,
             role: 'model',
             isSystem: true,
             text: `🛠️ Task created: "${created.title}" under property "${activeProperty.name}".`
           }
         ]);
-      } else if (actionBlock.action === 'create_transaction') {
+      } else if (type === 'create_transaction') {
+        const txPayload = actionBlock.transaction || actionBlock;
         const seedTx = {
-          ...actionBlock.transaction,
+          ...txPayload,
           propertyId: activeProperty.id,
-          date: actionBlock.transaction.date || new Date().toISOString().split('T')[0],
+          date: txPayload.date || new Date().toISOString().split('T')[0],
           parsedByGemini: true,
           geminiConfidence: 1.0,
           needsReview: false,
-          description: actionBlock.transaction.description || 'Logged via AI Chat',
+          description: txPayload.description || 'Logged via AI Chat',
         };
         const created = await dbService.saveTransaction(seedTx);
 
@@ -120,7 +126,7 @@ export default function ChatPage({ activeProperty }) {
         setMessages(prev => [
           ...prev,
           {
-            id: `sys_${Date.now()}`,
+            id: `sys_${Date.now()}_tx_${created.id}`,
             role: 'model',
             isSystem: true,
             text: `💰 Transaction logged: "${created.vendor}" for ${formatCurrency(created.amount)} (${created.scheduleECategory}).`
