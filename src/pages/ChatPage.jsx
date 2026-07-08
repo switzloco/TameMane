@@ -9,7 +9,8 @@ export default function ChatPage({ activeProperty }) {
     {
       id: 'welcome',
       role: 'model',
-      text: "Hi Nick! I'm TameMane PM. I have loaded the portfolio context. You can ask me to create tasks, categorize transactions, or ask tax-related questions."
+      text: "Hi Nick! I'm TameMane Orchestrator. I have loaded the portfolio context. You can ask me to create tasks, categorize transactions, or ask tax-related questions.",
+      timestamp: Date.now()
     }
   ]);
   const [inputText, setInputText] = useState('');
@@ -28,17 +29,24 @@ export default function ChatPage({ activeProperty }) {
           {
             id: 'welcome',
             role: 'model',
-            text: `Hi Nick! I'm TameMane PM. I have loaded the portfolio context for ${activeProperty.name}. You can ask me to create tasks, categorize transactions, or ask tax-related questions.`
+            text: `Hi Nick! I'm TameMane Orchestrator. I have loaded the portfolio context for ${activeProperty.name}. You can ask me to create tasks, categorize transactions, or ask tax-related questions.`,
+            timestamp: Date.now()
           }
         ]);
       }
     }
   }, [activeProperty]);
 
-  // Save chat history to localStorage when messages update
+  // Save chat history to localStorage when messages update (keep last 100)
   useEffect(() => {
     if (activeProperty && messages.length > 0) {
-      localStorage.setItem(`tm_chat_history_${activeProperty.id}`, JSON.stringify(messages));
+      const welcomeMsg = messages.find(m => m.id === 'welcome');
+      const otherMsgs = messages.filter(m => m.id !== 'welcome');
+      const pruned = [
+        ...(welcomeMsg ? [welcomeMsg] : []),
+        ...otherMsgs.slice(-100)
+      ];
+      localStorage.setItem(`tm_chat_history_${activeProperty.id}`, JSON.stringify(pruned));
     }
   }, [messages, activeProperty]);
 
@@ -59,7 +67,7 @@ export default function ChatPage({ activeProperty }) {
     setSending(true);
 
     // Add user message to UI
-    const newUserMsg = { id: `msg_${Date.now()}`, role: 'user', text: userText };
+    const newUserMsg = { id: `msg_${Date.now()}_user`, role: 'user', text: userText, timestamp: Date.now() };
     setMessages(prev => [...prev, newUserMsg]);
 
     try {
@@ -75,9 +83,11 @@ export default function ChatPage({ activeProperty }) {
         recentTransactions: transactions.slice(0, 15) // limit to recent ones for context efficiency
       };
 
-      // 2. Fetch history
+      // 2. Fetch history (limit context window payload to 48 hours & max 15 messages)
+      const cutoff = Date.now() - 48 * 60 * 60 * 1000;
       const history = messages
-        .filter(m => m.id !== 'welcome')
+        .filter(m => m.id !== 'welcome' && !m.isSystem && (!m.timestamp || m.timestamp >= cutoff))
+        .slice(-15)
         .map(m => ({ role: m.role, text: m.text }));
 
       // 3. Send message to agent
@@ -85,7 +95,7 @@ export default function ChatPage({ activeProperty }) {
 
       // 4. Append model text response
       const modelMsgId = `msg_${Date.now()}_model`;
-      setMessages(prev => [...prev, { id: modelMsgId, role: 'model', text: response.text }]);
+      setMessages(prev => [...prev, { id: modelMsgId, role: 'model', text: response.text, timestamp: Date.now() }]);
 
       // 5. Handle action execution
       if (response.actions && response.actions.length > 0) {
@@ -100,7 +110,8 @@ export default function ChatPage({ activeProperty }) {
         { 
           id: `msg_${Date.now()}_err`, 
           role: 'model', 
-          text: 'Sorry, I encountered an error communicating with my brain. Please check your internet connection and API key.' 
+          text: 'Sorry, I encountered an error communicating with my brain. Please check your internet connection and API key.',
+          timestamp: Date.now()
         }
       ]);
     } finally {
@@ -131,7 +142,8 @@ export default function ChatPage({ activeProperty }) {
             id: `sys_${Date.now()}_task_${created.id}`,
             role: 'model',
             isSystem: true,
-            text: `🛠️ Task created: "${created.title}" under property "${activeProperty.name}".`
+            text: `🛠️ Task created: "${created.title}" under property "${activeProperty.name}".`,
+            timestamp: Date.now()
           }
         ]);
       } else if (type === 'update_task') {
@@ -146,7 +158,8 @@ export default function ChatPage({ activeProperty }) {
               id: `sys_${Date.now()}_task_update_${updated.id}`,
               role: 'model',
               isSystem: true,
-              text: `🔄 Task updated: "${updated.title}" (Status: ${updated.status || 'unchanged'}).`
+              text: `🔄 Task updated: "${updated.title}" (Status: ${updated.status || 'unchanged'}).`,
+              timestamp: Date.now()
             }
           ]);
         }
@@ -170,7 +183,8 @@ export default function ChatPage({ activeProperty }) {
             id: `sys_${Date.now()}_tx_${created.id}`,
             role: 'model',
             isSystem: true,
-            text: `💰 Transaction logged: "${created.vendor}" for ${formatCurrency(created.amount)} (${created.scheduleECategory}).`
+            text: `💰 Transaction logged: "${created.vendor}" for ${formatCurrency(created.amount)} (${created.scheduleECategory}).`,
+            timestamp: Date.now()
           }
         ]);
       }
