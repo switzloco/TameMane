@@ -1,0 +1,55 @@
+# Builds the Vite app and deploys it to Firebase Hosting on every push to main.
+#
+# This workflow is a no-op until setup is finished: the deploy step is skipped
+# unless the FIREBASE_SERVICE_ACCOUNT secret is present, so main stays green in
+# the meantime. See FIREBASE_DEPLOY.md for the one-time GitHub settings to add.
+name: Deploy to Firebase Hosting on merge
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+        env:
+          # Inlined into the client bundle at build time. Optional: the app
+          # builds fine without it, but AI features need it at runtime.
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+
+      # Only deploy once the service account secret has been configured.
+      - name: Check for Firebase credentials
+        id: check
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$SA" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deploy — FIREBASE_SERVICE_ACCOUNT secret not set. See FIREBASE_DEPLOY.md."
+          fi
+
+      - name: Deploy to Firebase Hosting
+        if: steps.check.outputs.present == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
