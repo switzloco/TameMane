@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Sparkles, Clipboard, CheckCircle } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Clipboard, CheckCircle, ImagePlus, X } from 'lucide-react';
 import { sendPMMessage } from '../services/pmAgent';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -15,8 +15,10 @@ export default function ChatPage({ activeProperty }) {
   ]);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState([]);
 
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Load chat history when active property changes
   useEffect(() => {
@@ -46,7 +48,20 @@ export default function ChatPage({ activeProperty }) {
         ...(welcomeMsg ? [welcomeMsg] : []),
         ...otherMsgs.slice(-100)
       ];
-      localStorage.setItem(`tm_chat_history_${activeProperty.id}`, JSON.stringify(pruned));
+      const key = `tm_chat_history_${activeProperty.id}`;
+      try {
+        localStorage.setItem(key, JSON.stringify(pruned));
+      } catch (err) {
+        // Base64 image attachments can blow past the localStorage quota. If that
+        // happens, persist the conversation without the heavy image payloads.
+        console.warn('Chat history too large to persist with images, stripping attachments.', err);
+        const lightweight = pruned.map(m => (m.images ? { ...m, images: undefined } : m));
+        try {
+          localStorage.setItem(key, JSON.stringify(lightweight));
+        } catch (innerErr) {
+          console.warn('Failed to persist chat history.', innerErr);
+        }
+      }
     }
   }, [messages, activeProperty]);
 
@@ -58,16 +73,44 @@ export default function ChatPage({ activeProperty }) {
     scrollToBottom();
   }, [messages, sending]);
 
+  const handleFilesSelected = (e) => {
+    const files = Array.from(e.target.files || []);
+    // Reset the input so selecting the same file again re-triggers onChange
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    files.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAttachments(prev => [...prev, reader.result]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!inputText.trim() || sending) return;
+    if ((!inputText.trim() && attachments.length === 0) || sending) return;
 
     const userText = inputText;
+    const userImages = attachments;
     setInputText('');
+    setAttachments([]);
     setSending(true);
 
     // Add user message to UI
-    const newUserMsg = { id: `msg_${Date.now()}_user`, role: 'user', text: userText, timestamp: Date.now() };
+    const newUserMsg = {
+      id: `msg_${Date.now()}_user`,
+      role: 'user',
+      text: userText,
+      images: userImages.length > 0 ? userImages : undefined,
+      timestamp: Date.now()
+    };
     setMessages(prev => [...prev, newUserMsg]);
 
     try {
@@ -90,8 +133,8 @@ export default function ChatPage({ activeProperty }) {
         .slice(-15)
         .map(m => ({ role: m.role, text: m.text }));
 
-      // 3. Send message to agent
-      const response = await sendPMMessage(userText, portfolioContext, history);
+      // 3. Send message to agent (with any attached images)
+      const response = await sendPMMessage(userText, portfolioContext, history, userImages);
 
       // 4. Append model text response
       const modelMsgId = `msg_${Date.now()}_model`;
@@ -228,10 +271,22 @@ export default function ChatPage({ activeProperty }) {
 
               {/* Message Bubble */}
               <div className={`p-3.5 rounded-3xl text-sm leading-relaxed ${
-                isModel 
-                  ? 'bg-dark-card border border-dark-border text-slate-100 rounded-tl-none' 
+                isModel
+                  ? 'bg-dark-card border border-dark-border text-slate-100 rounded-tl-none'
                   : 'bg-blue-600 text-white rounded-tr-none shadow-lg shadow-blue-600/15'
               }`}>
+                {msg.images && msg.images.length > 0 && (
+                  <div className={`flex flex-wrap gap-2 ${msg.text ? 'mb-2' : ''}`}>
+                    {msg.images.map((src, i) => (
+                      <img
+                        key={i}
+                        src={src}
+                        alt="Attached"
+                        className="w-28 h-28 object-cover rounded-2xl border border-white/15"
+                      />
+                    ))}
+                  </div>
+                )}
                 {msg.text}
               </div>
             </div>
@@ -254,23 +309,66 @@ export default function ChatPage({ activeProperty }) {
       </div>
 
       {/* Input Form */}
-      <form onSubmit={handleSendMessage} className="sticky bottom-0 bg-dark-bg pt-2 border-t border-dark-border flex gap-2">
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Ask PM Agent..."
-          disabled={sending}
-          className="flex-1 px-4 py-3 bg-slate-900 border border-dark-border rounded-2xl text-white text-sm focus:border-blue-500 focus:outline-none disabled:opacity-55"
-        />
-        <button
-          type="submit"
-          disabled={sending || !inputText.trim()}
-          className="p-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-2xl active:scale-95 transition-all flex-shrink-0 flex items-center justify-center"
-        >
-          <Send size={18} />
-        </button>
-      </form>
+      <div className="sticky bottom-0 bg-dark-bg pt-2 border-t border-dark-border">
+        {/* Attachment Previews */}
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 pb-2">
+            {attachments.map((src, i) => (
+              <div key={i} className="relative w-16 h-16">
+                <img
+                  src={src}
+                  alt="Attachment preview"
+                  className="w-16 h-16 object-cover rounded-xl border border-dark-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(i)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-800 border border-slate-600 text-slate-300 rounded-full flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors"
+                  aria-label="Remove attachment"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleSendMessage} className="flex gap-2">
+          {/* Hidden file input (supports camera capture on mobile) */}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            ref={fileInputRef}
+            onChange={handleFilesSelected}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending}
+            aria-label="Attach image"
+            className="p-3 bg-slate-900 border border-dark-border text-slate-300 hover:text-white hover:border-blue-500 rounded-2xl active:scale-95 transition-all flex-shrink-0 flex items-center justify-center disabled:opacity-55"
+          >
+            <ImagePlus size={18} />
+          </button>
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={attachments.length > 0 ? 'Add a note (optional)...' : 'Ask PM Agent...'}
+            disabled={sending}
+            className="flex-1 px-4 py-3 bg-slate-900 border border-dark-border rounded-2xl text-white text-sm focus:border-blue-500 focus:outline-none disabled:opacity-55"
+          />
+          <button
+            type="submit"
+            disabled={sending || (!inputText.trim() && attachments.length === 0)}
+            className="p-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-2xl active:scale-95 transition-all flex-shrink-0 flex items-center justify-center"
+          >
+            <Send size={18} />
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

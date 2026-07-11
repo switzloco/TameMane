@@ -70,16 +70,41 @@ DIRECTIONS:
 
 10. Support MULTIPLE actions in a single response if the user requests or describes multiple things (e.g. 5 tasks mentioned in one dump).
 11. Keep your conversational responses concise, professional, and actionable. You are an orchestrator, not a chatbot.
+12. The user may attach one or more IMAGES (receipts, invoices, property photos, damage, appliances, listings). Inspect them carefully:
+    - If an image is a receipt or invoice, extract the vendor, amount, date, and Schedule E category and emit a "create_transaction" action.
+    - If an image shows a property issue, damage, or maintenance need, capture it as a "create_task" with the appropriate priority and category.
+    - Describe briefly what you see, then take the relevant actions. Never ignore an attached image.
 `;
+
+/**
+ * Converts a data URL / base64 string into a Gemini inlineData part.
+ * @param {string} dataUrl A base64 image string, with or without a data URL prefix.
+ * @returns {object|null} A Gemini part containing inlineData, or null if empty.
+ */
+function toInlineDataPart(dataUrl) {
+  if (!dataUrl) return null;
+
+  let mimeType = 'image/jpeg';
+  let rawBase64 = dataUrl;
+
+  const dataPrefixMatch = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if (dataPrefixMatch) {
+    mimeType = dataPrefixMatch[1];
+    rawBase64 = dataPrefixMatch[2];
+  }
+
+  return { inlineData: { mimeType, data: rawBase64 } };
+}
 
 /**
  * Sends a message to the PM Agent.
  * @param {string} userMessage The user's input text.
  * @param {object} portfolioContext The active property context, open tasks, and recent transactions.
  * @param {Array<object>} history Chat history containing [{ role: 'user'|'model', text: '...' }].
+ * @param {Array<string>} attachments Base64 / data URL encoded images attached to the current message.
  * @returns {Promise<object>} The agent's response containing { text, actions } where actions is the parsed array of actions.
  */
-export async function sendPMMessage(userMessage, portfolioContext, history = []) {
+export async function sendPMMessage(userMessage, portfolioContext, history = [], attachments = []) {
   try {
     const model = getModel();
     const systemPrompt = PM_SYSTEM_PROMPT_TEMPLATE.replace(
@@ -87,7 +112,21 @@ export async function sendPMMessage(userMessage, portfolioContext, history = [])
       JSON.stringify(portfolioContext, null, 2)
     );
 
-    // Map history to Gemini API format
+    // Build the parts for the current user turn: text plus any attached images.
+    const imageParts = (attachments || [])
+      .map(toInlineDataPart)
+      .filter(Boolean);
+
+    const userParts = [];
+    if (userMessage && userMessage.trim()) {
+      userParts.push({ text: userMessage });
+    } else if (imageParts.length > 0) {
+      // Ensure the model always has a textual anchor when only images are sent.
+      userParts.push({ text: 'Please review the attached image(s) and take any appropriate actions.' });
+    }
+    userParts.push(...imageParts);
+
+    // Map history to Gemini API format (history is kept text-only for payload efficiency)
     const contents = [
       {
         role: 'user',
@@ -99,7 +138,7 @@ export async function sendPMMessage(userMessage, portfolioContext, history = [])
       })),
       {
         role: 'user',
-        parts: [{ text: userMessage }]
+        parts: userParts
       }
     ];
 
