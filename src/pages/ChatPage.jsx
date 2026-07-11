@@ -143,7 +143,7 @@ export default function ChatPage({ activeProperty }) {
       // 5. Handle action execution
       if (response.actions && response.actions.length > 0) {
         for (const act of response.actions) {
-          await executeAgentAction(act);
+          await executeAgentAction(act, userImages);
         }
       }
     } catch (err) {
@@ -162,10 +162,10 @@ export default function ChatPage({ activeProperty }) {
     }
   };
 
-  const executeAgentAction = async (actionBlock) => {
+  const executeAgentAction = async (actionBlock, currentAttachments = []) => {
     try {
       const type = actionBlock.type || actionBlock.action;
-      
+
       if (type === 'create_task') {
         const taskPayload = actionBlock.task || actionBlock;
         const seedTask = {
@@ -192,16 +192,28 @@ export default function ChatPage({ activeProperty }) {
       } else if (type === 'update_task') {
         const taskPayload = actionBlock.task || actionBlock;
         if (taskPayload.id) {
-          const updated = await dbService.saveTask(taskPayload);
-          
+          const patch = { ...taskPayload };
+          // Mirror the manual "toggle complete" behavior from the Tasks page
+          // so tasks finished via chat get a completedDate, and reopened
+          // tasks have it cleared.
+          if (patch.status === 'completed') {
+            patch.completedDate = new Date().toISOString();
+          } else if (patch.status) {
+            patch.completedDate = null;
+          }
+          const updated = await dbService.saveTask(patch);
+
           // Append system notification message
+          const isCompleted = updated.status === 'completed';
           setMessages(prev => [
             ...prev,
             {
               id: `sys_${Date.now()}_task_update_${updated.id}`,
               role: 'model',
               isSystem: true,
-              text: `🔄 Task updated: "${updated.title}" (Status: ${updated.status || 'unchanged'}).`,
+              text: isCompleted
+                ? `✅ Task completed: "${updated.title}".`
+                : `🔄 Task updated: "${updated.title}" (Status: ${updated.status || 'unchanged'}).`,
               timestamp: Date.now()
             }
           ]);
@@ -216,6 +228,9 @@ export default function ChatPage({ activeProperty }) {
           geminiConfidence: 1.0,
           needsReview: false,
           description: txPayload.description || 'Logged via AI Chat',
+          // Attach the receipt photo the user sent in this turn, if any,
+          // so it's stored alongside the transaction just like a manual scan.
+          receiptUrl: txPayload.receiptUrl || currentAttachments[0] || null,
         };
         const created = await dbService.saveTransaction(seedTx);
 
@@ -226,7 +241,7 @@ export default function ChatPage({ activeProperty }) {
             id: `sys_${Date.now()}_tx_${created.id}`,
             role: 'model',
             isSystem: true,
-            text: `💰 Transaction logged: "${created.vendor}" for ${formatCurrency(created.amount)} (${created.scheduleECategory}).`,
+            text: `💰 Transaction logged: "${created.vendor}" for ${formatCurrency(created.amount)} (${created.scheduleECategory}).${created.receiptUrl ? ' 📎 Receipt attached.' : ''}`,
             timestamp: Date.now()
           }
         ]);

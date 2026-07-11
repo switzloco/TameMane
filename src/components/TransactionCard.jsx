@@ -1,10 +1,11 @@
-import React from 'react';
-import { DollarSign, FileText, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { DollarSign, FileText, CheckCircle, AlertTriangle, Trash2, Receipt } from 'lucide-react';
 import { SCHEDULE_E_CATEGORIES } from '../config/constants';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate } from '../utils/dateHelpers';
 
 export default function TransactionCard({ transaction, onDelete }) {
+  const [showReceipt, setShowReceipt] = useState(false);
   const isExpense = transaction.type === 'expense';
   const category = SCHEDULE_E_CATEGORIES[transaction.scheduleECategory];
   const categoryLabel = category?.label || 'Uncategorized';
@@ -65,6 +66,16 @@ export default function TransactionCard({ transaction, onDelete }) {
               <AlertTriangle size={8} /> Needs Review
             </span>
           )}
+
+          {transaction.receiptUrl && (
+            <button
+              type="button"
+              onClick={() => setShowReceipt(true)}
+              className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full hover:bg-blue-500/20 transition-colors"
+            >
+              <Receipt size={10} /> Receipt
+            </button>
+          )}
         </div>
       </div>
 
@@ -75,6 +86,21 @@ export default function TransactionCard({ transaction, onDelete }) {
       >
         <Trash2 size={16} />
       </button>
+
+      {/* Receipt Lightbox */}
+      {showReceipt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowReceipt(false)}
+        >
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" />
+          <img
+            src={transaction.receiptUrl}
+            alt="Receipt"
+            className="relative z-10 max-w-full max-h-[85vh] rounded-2xl border border-slate-700 shadow-2xl"
+          />
+        </div>
+      )}
     </div>
   );
 }
