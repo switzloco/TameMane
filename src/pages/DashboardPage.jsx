@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   CheckSquare, 
   TrendingUp, 
-  AlertTriangle, 
   DollarSign,
-  Plus,
   ArrowRight,
   ClipboardList
 } from 'lucide-react';

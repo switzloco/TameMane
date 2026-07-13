@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, X, ListFilter, ClipboardCheck, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, X, ListFilter, ClipboardCheck } from 'lucide-react';
 import TaskCard from '../components/TaskCard';
 import { dbService } from '../services/dbService';
 import { SCHEDULE_E_CATEGORIES } from '../config/constants';
+import { sortTasks } from '../utils/taskSorter';
 
 export default function TasksPage({ activeProperty }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('open'); // 'all' | 'open' | 'completed'
+  const [sortBy, setSortBy] = useState('smart'); // 'smart' | 'priority' | 'dueDate' | 'created'
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
@@ -20,7 +22,7 @@ export default function TasksPage({ activeProperty }) {
   const [blockedBy, setBlockedBy] = useState('');
   const [status, setStatus] = useState('open');
 
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     if (!activeProperty) return;
     setLoading(true);
     try {
@@ -31,11 +33,11 @@ export default function TasksPage({ activeProperty }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeProperty]);
 
   useEffect(() => {
     loadTasks();
-  }, [activeProperty]);
+  }, [loadTasks]);
 
   const handleToggleStatus = async (task) => {
     const updatedTask = {
@@ -106,6 +108,46 @@ export default function TasksPage({ activeProperty }) {
     return true;
   });
 
+  const sortedTasks = useMemo(() => {
+    let list = [...filteredTasks];
+    if (sortBy === 'smart') {
+      return sortTasks(list);
+    }
+    
+    // For other sort options, separate completed and uncompleted tasks
+    // to always keep completed tasks at the bottom
+    const completed = list.filter(t => t.status === 'completed');
+    const uncompleted = list.filter(t => t.status !== 'completed');
+
+    if (sortBy === 'priority') {
+      const getPriorityWeight = (p) => {
+        switch (p?.toLowerCase()) {
+          case 'critical': return 4;
+          case 'high': return 3;
+          case 'medium': return 2;
+          case 'low': return 1;
+          default: return 0;
+        }
+      };
+      uncompleted.sort((a, b) => getPriorityWeight(b.priority) - getPriorityWeight(a.priority));
+    } else if (sortBy === 'dueDate') {
+      uncompleted.sort((a, b) => {
+        if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
+        if (a.dueDate) return -1;
+        if (b.dueDate) return 1;
+        return 0;
+      });
+    } else if (sortBy === 'created') {
+      uncompleted.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+    }
+
+    return [...uncompleted, ...completed];
+  }, [filteredTasks, sortBy]);
+
   const otherTasks = tasks.filter(t => t.id !== editingTask?.id);
 
   return (
@@ -142,12 +184,30 @@ export default function TasksPage({ activeProperty }) {
         ))}
       </div>
 
+      {/* Sort Options */}
+      <div className="flex items-center justify-between px-1.5 py-0.5">
+        <div className="flex items-center gap-1.5 text-slate-400">
+          <ListFilter size={13} className="text-slate-500" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sort By</span>
+        </div>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="text-xs bg-slate-900 border border-dark-border text-slate-300 rounded-2xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500/50 transition-colors cursor-pointer"
+        >
+          <option value="smart">Smart Sort (Dependencies)</option>
+          <option value="priority">Priority (High → Low)</option>
+          <option value="dueDate">Due Date (Soonest first)</option>
+          <option value="created">Date Created (Oldest first)</option>
+        </select>
+      </div>
+
       {/* Task List */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
-      ) : filteredTasks.length === 0 ? (
+      ) : sortedTasks.length === 0 ? (
         <div className="p-10 rounded-3xl bg-dark-card border border-dark-border text-center flex flex-col items-center justify-center">
           <ClipboardCheck className="text-slate-600 mb-2" size={32} />
           <span className="text-sm font-semibold text-slate-300">No tasks found</span>
@@ -155,7 +215,7 @@ export default function TasksPage({ activeProperty }) {
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {filteredTasks.map((task) => (
+          {sortedTasks.map((task) => (
             <TaskCard 
               key={task.id} 
               task={task} 

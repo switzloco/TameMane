@@ -7,6 +7,7 @@ import {
   DollarSign 
 } from 'lucide-react';
 import PropertySwitcher from './PropertySwitcher';
+import SyncStatus from '../sync/SyncStatus';
 
 export default function AppShell({ 
   children, 
@@ -31,11 +32,14 @@ export default function AppShell({
         <h1 className="text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
           TameMane
         </h1>
-        <PropertySwitcher 
-          properties={properties} 
-          activeProperty={activeProperty} 
-          setActiveProperty={setActiveProperty} 
-        />
+        <div className="flex items-center gap-2">
+          <SyncStatus />
+          <PropertySwitcher 
+            properties={properties} 
+            activeProperty={activeProperty} 
+            setActiveProperty={setActiveProperty} 
+          />
+        </div>
       </header>
 
       {/* Main Content Area */}

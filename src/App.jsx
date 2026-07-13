@@ -6,12 +6,23 @@ import TransactionsPage from './pages/TransactionsPage';
 import ReceiptCapturePage from './pages/ReceiptCapturePage';
 import ChatPage from './pages/ChatPage';
 import { dbService } from './services/dbService';
+import { auth } from './config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
   const [properties, setProperties] = useState([]);
   const [activeProperty, setActiveProperty] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
+  const [authTrigger, setAuthTrigger] = useState(0);
+
+  // Listen to auth state changes to reload data
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthTrigger(prev => prev + 1);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     async function loadProperties() {
@@ -19,9 +30,11 @@ export default function App() {
         const props = await dbService.getProperties();
         setProperties(props);
         if (props.length > 0) {
-          // Default to Quinto Way
+          // Default to Quinto Way or first prop
           const defaultProp = props.find(p => p.id === '3060_quinto') || props[0];
           setActiveProperty(defaultProp);
+        } else {
+          setActiveProperty(null);
         }
       } catch (err) {
         console.error('Error loading properties:', err);
@@ -30,7 +43,7 @@ export default function App() {
       }
     }
     loadProperties();
-  }, []);
+  }, [authTrigger]);
 
   if (loading) {
     return (
