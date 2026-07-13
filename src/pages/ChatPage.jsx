@@ -4,6 +4,59 @@ import { sendPMMessage } from '../services/pmAgent';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/formatCurrency';
 
+const renderMessageText = (text) => {
+  if (!text) return null;
+
+  // Split the text into lines to preserve paragraph structure
+  const lines = text.split('\n');
+
+  return lines.map((line, lineIdx) => {
+    // Check if line is a bullet point (starts with * or - followed by space)
+    const isBullet = line.trim().startsWith('* ') || line.trim().startsWith('- ');
+    let cleanLine = line;
+    if (isBullet) {
+      cleanLine = line.trim().replace(/^[\*\-]\s+/, '');
+    }
+
+    // Parse **bold** parts in the line
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    // Use regex to find and format all **bold** matches
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    while ((match = boldRegex.exec(cleanLine)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(cleanLine.substring(lastIndex, match.index));
+      }
+      parts.push(<strong key={`bold-${match.index}`} className="font-bold">{match[1]}</strong>);
+      lastIndex = boldRegex.lastIndex;
+    }
+
+    if (lastIndex < cleanLine.length) {
+      parts.push(cleanLine.substring(lastIndex));
+    }
+
+    if (isBullet) {
+      return (
+        <div key={lineIdx} className="flex items-start gap-2 my-1 pl-3">
+          <span className="text-blue-400 mt-1 flex-shrink-0 text-xs">•</span>
+          <span className="flex-1">{parts}</span>
+        </div>
+      );
+    }
+
+    // Use a small empty spacer for empty lines, else standard paragraph
+    return line.trim() === '' ? (
+      <div key={lineIdx} className="h-2" />
+    ) : (
+      <p key={lineIdx} className="my-0.5">
+        {parts}
+      </p>
+    );
+  });
+};
+
 export default function ChatPage({ activeProperty }) {
   const [messages, setMessages] = useState([
     {
@@ -302,10 +355,11 @@ export default function ChatPage({ activeProperty }) {
                     ))}
                   </div>
                 )}
-                {msg.text}
+                {renderMessageText(msg.text)}
               </div>
             </div>
           );
+
         })}
 
         {sending && (
