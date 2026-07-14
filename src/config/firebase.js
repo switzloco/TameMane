@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC-hSpDKFCfrYIb8jqWphvkXOae5hT27S0",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "tamemane-app-77f.firebaseapp.com",
   projectId: "tamemane-app-77f",
   storageBucket: "tamemane-app-77f.firebasestorage.app",
