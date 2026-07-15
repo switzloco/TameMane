@@ -1,4 +1,5 @@
 import { getModel } from './geminiClient';
+import { getRetailers } from '../config/retailers';
 
 const PM_SYSTEM_PROMPT_TEMPLATE = `You are TameMane Orchestrator, the central control agent for a multi-property rental portfolio and household operations.
 You coordinate a swarm of operational sub-agents and orchestrate all to-dos, tasks, logs, and transactions.
@@ -129,10 +130,7 @@ Respond with a structured research brief covering ALL of the following sections:
 ## Recommendations
 - Specific product names/models if applicable (e.g., "Kwikset SmartKey" not just "a lock")
 - Why you recommend them (rental-friendly, cost-effective, durable, etc.)
-- Construct clean, clickable search links for Amazon, Home Depot, and/or Target by encoding the query terms. Use this format:
-  * [Search on Amazon](https://www.amazon.com/s?k=Search+Query)
-  * [Search on Home Depot](https://www.homedepot.com/s/Search+Query)
-  * [Search on Target](https://www.target.com/s?searchTerm=Search+Query)
+- {retailerInstructions}
 
 ## Important Considerations
 - Local regulations or code requirements (especially for CA properties)
@@ -156,7 +154,19 @@ export async function researchTask(task, propertyContext) {
     // Use Flash for research — cheaper and fast enough for this use case
     const model = getModel('gemini-2.0-flash');
 
+    const activeRetailers = getRetailers().filter(r => r.active);
+    let retailerInstructions = '';
+    if (activeRetailers.length > 0) {
+      retailerInstructions = 'Construct clean, clickable search links for the following retailers by encoding the query terms. Use this exact format:\n';
+      activeRetailers.forEach(r => {
+        retailerInstructions += `  * [Search on ${r.name}](${r.url}Search+Query)\n`;
+      });
+    } else {
+      retailerInstructions = 'Do not construct or output any retail search links.';
+    }
+
     const prompt = RESEARCH_PROMPT_TEMPLATE
+      .replace('{retailerInstructions}', retailerInstructions)
       .replace('{propertyContext}', JSON.stringify(propertyContext, null, 2))
       .replace('{taskTitle}', task.title || '')
       .replace('{taskDescription}', task.description || '')

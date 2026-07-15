@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   CheckSquare, 
   Camera, 
   MessageSquare, 
   DollarSign,
-  FileText
+  FileText,
+  Settings
 } from 'lucide-react';
 import PropertySwitcher from './PropertySwitcher';
 import SyncStatus from '../sync/SyncStatus';
+import SettingsModal from '../SettingsModal';
 
 export default function AppShell({ 
   children, 
@@ -18,6 +20,7 @@ export default function AppShell({
   activeProperty, 
   setActiveProperty 
 }) {
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const isRenter = activeProperty?.userRole === 'renter';
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -41,6 +44,13 @@ export default function AppShell({
             activeProperty={activeProperty} 
             setActiveProperty={setActiveProperty} 
           />
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl active:scale-95 transition-all flex items-center justify-center"
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
         </div>
       </header>
 
@@ -72,6 +82,10 @@ export default function AppShell({
           })}
         </div>
       </nav>
+      <SettingsModal 
+        isOpen={showSettingsModal} 
+        onClose={() => setShowSettingsModal(false)} 
+      />
     </div>
   );
 }
