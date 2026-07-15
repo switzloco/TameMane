@@ -97,6 +97,17 @@ export default function TaskCard({ task, allTasks = [], activeProperty, onToggle
             </p>
           )}
 
+          {/* Attached Image Thumbnails */}
+          {task.images && task.images.length > 0 && (
+            <div className="flex gap-1.5 mt-2 overflow-x-auto py-0.5 scrollbar-none">
+              {task.images.map((img) => (
+                <div key={img.id} className="w-9 h-9 rounded-lg overflow-hidden border border-slate-800/80 flex-shrink-0 bg-slate-900">
+                  <img src={img.url} alt="Task photo" className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Dependency indicator */}
           {isBlocked && (
             <div className="flex items-center gap-1 mt-2 text-[10px] text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full w-fit">

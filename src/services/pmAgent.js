@@ -114,6 +114,7 @@ Title: {taskTitle}
 Description: {taskDescription}
 Category: {taskCategory}
 Priority: {taskPriority}
+{imageContext}
 
 Respond with a structured research brief covering ALL of the following sections:
 
@@ -139,7 +140,8 @@ Respond with a structured research brief covering ALL of the following sections:
 - Safety concerns
 - Timing considerations (best time to do this, any deadlines)
 
-Keep your response concise but thorough. Use bullet points. Be specific — real brand names, real price ranges, real steps. Do not be vague or generic.`;
+Keep your response concise but thorough. Use bullet points. Be specific — real brand names, real price ranges, real steps. Do not be vague or generic.
+If image descriptions are provided, reference what was observed in the photos to make your recommendations more specific and targeted.`;
 
 /**
  * Performs deep research on a specific task.
@@ -165,13 +167,28 @@ export async function researchTask(task, propertyContext) {
       retailerInstructions = 'Do not construct or output any retail search links.';
     }
 
+    // Build image context from stored descriptions
+    let imageContext = '';
+    if (task.imageDescriptions && task.imageDescriptions.length > 0) {
+      imageContext = '\nATTACHED PHOTO DESCRIPTIONS (AI-generated from user photos):\n';
+      task.imageDescriptions.forEach((desc, i) => {
+        imageContext += `\nPhoto ${i + 1}:\n`;
+        imageContext += `  Scene: ${desc.scene || 'N/A'}\n`;
+        imageContext += `  Items visible: ${(desc.items || []).join(', ') || 'N/A'}\n`;
+        imageContext += `  Condition: ${desc.condition || 'N/A'}\n`;
+        imageContext += `  Dimensions (est): ${desc.estimatedDimensions || 'N/A'}\n`;
+        imageContext += `  Notes: ${desc.notes || 'N/A'}\n`;
+      });
+    }
+
     const prompt = RESEARCH_PROMPT_TEMPLATE
       .replace('{retailerInstructions}', retailerInstructions)
       .replace('{propertyContext}', JSON.stringify(propertyContext, null, 2))
       .replace('{taskTitle}', task.title || '')
       .replace('{taskDescription}', task.description || '')
       .replace('{taskCategory}', task.category || 'other')
-      .replace('{taskPriority}', task.priority || 'medium');
+      .replace('{taskPriority}', task.priority || 'medium')
+      .replace('{imageContext}', imageContext);
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }]
@@ -181,6 +198,84 @@ export async function researchTask(task, propertyContext) {
   } catch (error) {
     console.error('Research task error:', error);
     throw new Error(`Failed to research task: ${error.message}`);
+  }
+}
+
+
+/**
+ * Prompt for generating structured JSON descriptions from task photos.
+ * Designed to extract everything a research agent would need without storing raw images.
+ */
+const IMAGE_DESCRIPTION_PROMPT = `You are analyzing a photo attached to a property management task.
+Generate a detailed, structured JSON description of what you see.
+
+Respond with ONLY valid JSON in this exact schema:
+{
+  "scene": "Brief description of the overall scene (e.g., 'Cluttered single-car garage', 'Kitchen with dated cabinets')",
+  "items": ["List", "of", "every", "identifiable", "item", "in the photo"],
+  "condition": "Overall condition assessment (e.g., 'Fair - functional but disorganized', 'Poor - water damage visible on ceiling')",
+  "estimatedDimensions": "Rough size estimate if determinable (e.g., '~12x20ft garage', '~10x8ft bedroom')",
+  "materials": ["Visible construction materials or finishes (e.g., 'laminate countertop', 'vinyl flooring', 'drywall')"],
+  "issuesSpotted": ["Any problems visible (e.g., 'peeling paint on far wall', 'outlet without cover plate')"],
+  "organizationOpportunities": ["Suggestions based on what you see (e.g., 'wall-mount bikes to free floor space', 'under-sink organizer would fit')"],
+  "notes": "Anything else notable — brand names on items, color scheme, lighting quality, etc."
+}
+
+Be thorough and specific. Name actual items, not categories. Say "red Craftsman rolling tool chest" not "toolbox".
+If you can read any brand names, labels, or model numbers, include them.`;
+
+
+/**
+ * Generates a structured JSON description of a task photo using Gemini Vision.
+ * The description is stored on the task (not the raw image) so the research agent
+ * has rich visual context without needing to re-process or persist large base64 blobs.
+ *
+ * @param {string} base64Image - The image as a base64 data URL
+ * @param {string} taskContext - Optional task title/description for better scene understanding
+ * @returns {Promise<object>} Parsed JSON description object
+ */
+export async function describeTaskImage(base64Image, taskContext = '') {
+  try {
+    const model = getModel('gemini-2.0-flash');
+    const imagePart = toInlineDataPart(base64Image);
+    if (!imagePart) throw new Error('Invalid image data');
+
+    const contextNote = taskContext
+      ? `\n\nThis photo is attached to a task: "${taskContext}". Use this context to focus your description.`
+      : '';
+
+    const result = await model.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [
+          imagePart,
+          { text: IMAGE_DESCRIPTION_PROMPT + contextNote }
+        ]
+      }]
+    });
+
+    const responseText = result.response.text();
+    // Strip markdown code fences if present
+    const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const description = JSON.parse(cleaned);
+
+    // Stamp with metadata
+    description.capturedAt = new Date().toISOString();
+    return description;
+  } catch (error) {
+    console.error('Image description error:', error);
+    // Return a minimal fallback so the task still saves
+    return {
+      scene: 'Photo attached (description failed)',
+      items: [],
+      condition: 'Unknown',
+      estimatedDimensions: 'Unknown',
+      materials: [],
+      issuesSpotted: [],
+      organizationOpportunities: [],
+      notes: `Description generation failed: ${error.message}`,
+      capturedAt: new Date().toISOString()
+    };
   }
 }
 

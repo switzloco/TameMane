@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, X, ListFilter, ClipboardCheck } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Plus, X, ListFilter, ClipboardCheck, Camera, Upload, Trash2, Loader2 } from 'lucide-react';
 import TaskCard from '../components/TaskCard';
 import { dbService } from '../services/dbService';
 import { SCHEDULE_E_CATEGORIES } from '../config/constants';
 import { sortTasks } from '../utils/taskSorter';
 import { notifyTaskCompleted } from '../services/notificationService';
+import { describeTaskImage } from '../services/pmAgent';
+import { resizeImage } from '../utils/imageHelpers';
 
 export default function TasksPage({ activeProperty }) {
   const [tasks, setTasks] = useState([]);
@@ -23,6 +25,9 @@ export default function TasksPage({ activeProperty }) {
   const [blockedBy, setBlockedBy] = useState('');
   const [status, setStatus] = useState('open');
   const [notes, setNotes] = useState('');
+  const [taskImages, setTaskImages] = useState([]);
+
+  const fileInputRef = useRef(null);
 
   const loadTasks = useCallback(async () => {
     if (!activeProperty) return;
@@ -79,6 +84,62 @@ export default function TasksPage({ activeProperty }) {
     }
   };
 
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      const tempId = 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      
+      // Add loading state immediately
+      setTaskImages(prev => [...prev, { id: tempId, url: '', loading: true, description: null }]);
+
+      // Read image
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const originalBase64 = reader.result;
+        try {
+          // 1. Generate full-res description via Vision API
+          const desc = await describeTaskImage(originalBase64, `${title || 'Task'}: ${description || ''}`);
+
+          // 2. Resize image to compact thumbnail for saving in Firestore/Localstorage
+          const thumbnail = await resizeImage(originalBase64, 160, 160);
+
+          // 3. Update taskImages entry
+          setTaskImages(prev =>
+            prev.map(img =>
+              img.id === tempId
+                ? { id: tempId, url: thumbnail, description: desc, loading: false }
+                : img
+            )
+          );
+        } catch (error) {
+          console.error('Error processing task image:', error);
+          setTaskImages(prev => prev.filter(img => img.id !== tempId));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = (imgId) => {
+    setTaskImages(prev => prev.filter(img => img.id !== imgId));
+  };
+
+  const handleCaptureClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.setAttribute('capture', 'environment');
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.removeAttribute('capture');
+      fileInputRef.current.click();
+    }
+  };
+
   const handleOpenAddModal = () => {
     setEditingTask(null);
     setTitle('');
@@ -89,6 +150,7 @@ export default function TasksPage({ activeProperty }) {
     setBlockedBy('');
     setStatus('open');
     setNotes('');
+    setTaskImages([]);
     setShowAddModal(true);
   };
 
@@ -102,6 +164,7 @@ export default function TasksPage({ activeProperty }) {
     setBlockedBy(task.blockedBy && task.blockedBy.length > 0 ? task.blockedBy[0] : '');
     setStatus(task.status || 'open');
     setNotes(task.notes || task.researchNotes || '');
+    setTaskImages(task.images || []);
     setShowAddModal(true);
   };
 
@@ -118,6 +181,12 @@ export default function TasksPage({ activeProperty }) {
       dueDate: dueDate ? new Date(dueDate).toISOString() : null,
       notes: notes,
       source: editingTask ? editingTask.source : 'manual',
+      images: taskImages.filter(img => !img.loading).map(img => ({
+        id: img.id,
+        url: img.url,
+        description: img.description
+      })),
+      imageDescriptions: taskImages.filter(img => !img.loading && img.description).map(img => img.description)
     };
     if (editingTask) {
       taskData.id = editingTask.id;
@@ -359,6 +428,66 @@ export default function TasksPage({ activeProperty }) {
                   onChange={(e) => setDueDate(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-2xl text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
                 />
+              </div>
+              {/* Image Attachments */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400">Photos / Visual Evidence</label>
+                
+                {/* Hidden input */}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  multiple
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                {/* Trigger Buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCaptureClick}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700/60 text-slate-300 font-semibold text-xs active:scale-98 transition-all"
+                  >
+                    <Camera size={14} className="text-blue-400" />
+                    Snap Photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUploadClick}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700/60 text-slate-300 font-semibold text-xs active:scale-98 transition-all"
+                  >
+                    <Upload size={14} className="text-purple-400" />
+                    Upload Image
+                  </button>
+                </div>
+
+                {/* Preview strip */}
+                {taskImages.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto py-1 mt-1 scrollbar-thin">
+                    {taskImages.map((img) => (
+                      <div key={img.id} className="relative flex-shrink-0 w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden group">
+                        {img.loading ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80">
+                            <Loader2 size={16} className="text-blue-500 animate-spin" />
+                          </div>
+                        ) : (
+                          <>
+                            <img src={img.url} alt="Attached" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(img.id)}
+                              className="absolute top-1 right-1 p-1 rounded-lg bg-black/70 hover:bg-red-600 text-white hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-1">
