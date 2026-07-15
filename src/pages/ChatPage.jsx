@@ -343,10 +343,10 @@ export default function ChatPage({ activeProperty, chatInitialPrompt, setChatIni
             const allTasks = await dbService.getTasks(activeProperty.id);
             const task = allTasks.find(t => t.id === taskId);
             if (task) {
-              await dbService.saveTask({ ...task, researchNotes: findings });
+              await dbService.saveTask({ ...task, researchNotes: findings, notes: findings });
               await notifyResearchReady(task, findings);
             } else {
-              await dbService.saveTask({ id: taskId, researchNotes: findings });
+              await dbService.saveTask({ id: taskId, researchNotes: findings, notes: findings });
             }
 
             setMessages(prev => [

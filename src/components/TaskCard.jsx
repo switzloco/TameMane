@@ -39,7 +39,7 @@ export default function TaskCard({ task, allTasks = [], activeProperty, onToggle
       const findings = await researchTask(task, propertyContext);
       setResearchNotes(findings);
       setShowResearch(true);
-      await dbService.saveTask({ ...task, researchNotes: findings });
+      await dbService.saveTask({ ...task, researchNotes: findings, notes: findings });
       await notifyResearchReady(task, findings);
     } catch (err) {
       console.error('Research failed:', err);
@@ -48,18 +48,33 @@ export default function TaskCard({ task, allTasks = [], activeProperty, onToggle
     }
   };
 
+  const handleCardClick = (e) => {
+    // If the user has highlighted/selected text, do not trigger the edit modal
+    const selection = window.getSelection();
+    if (selection && selection.toString()) {
+      return;
+    }
+    onEdit(task);
+  };
+
   return (
-    <div className={`p-4 rounded-3xl border transition-all ${
-      isCompleted 
-        ? 'bg-slate-900/40 border-slate-800/80 opacity-60' 
-        : isBlocked
-          ? 'bg-dark-card border-slate-800/60 border-dashed opacity-85'
-          : 'bg-dark-card border-dark-border hover:border-slate-700'
-    }`}>
+    <div 
+      onClick={handleCardClick}
+      className={`p-4 rounded-3xl border transition-all cursor-pointer ${
+        isCompleted 
+          ? 'bg-slate-900/40 border-slate-800/80 opacity-60' 
+          : isBlocked
+            ? 'bg-dark-card border-slate-800/60 border-dashed opacity-85'
+            : 'bg-dark-card border-dark-border hover:border-slate-700 hover:bg-slate-800/20'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         {/* Completion checkbox wrapper */}
         <button 
-          onClick={() => onToggleStatus(task)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleStatus(task);
+          }}
           className="mt-0.5 text-slate-500 hover:text-blue-400 active:scale-90 transition-all flex-shrink-0"
         >
           {isCompleted ? (
@@ -120,7 +135,10 @@ export default function TaskCard({ task, allTasks = [], activeProperty, onToggle
           )}
           {researchNotes && (
             <button
-              onClick={() => setShowResearch(!showResearch)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowResearch(!showResearch);
+              }}
               className="flex items-center gap-1 mt-2 text-[10px] text-purple-400 hover:text-purple-300 transition-colors"
             >
               {showResearch ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
@@ -132,7 +150,10 @@ export default function TaskCard({ task, allTasks = [], activeProperty, onToggle
         {/* Action Panel */}
         <div className="flex flex-col gap-2 flex-shrink-0 items-center">
           <button
-            onClick={handleResearch}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleResearch();
+            }}
             disabled={researching}
             className="text-slate-500 hover:text-purple-400 p-1 rounded-xl active:scale-95 transition-all disabled:opacity-50"
             title="Research this task"
@@ -140,14 +161,20 @@ export default function TaskCard({ task, allTasks = [], activeProperty, onToggle
             {researching ? <Loader2 size={15} className="animate-spin text-purple-400" /> : <Sparkles size={15} />}
           </button>
           <button
-            onClick={() => onEdit(task)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(task);
+            }}
             className="text-slate-500 hover:text-blue-400 p-1 rounded-xl active:scale-95 transition-all"
             title="Edit Task"
           >
             <Edit2 size={15} />
           </button>
           <button
-            onClick={() => onDelete(task.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(task.id);
+            }}
             className="text-slate-500 hover:text-red-400 p-1 rounded-xl active:scale-95 transition-all"
             title="Delete Task"
           >

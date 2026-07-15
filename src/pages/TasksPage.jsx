@@ -22,6 +22,7 @@ export default function TasksPage({ activeProperty }) {
   const [dueDate, setDueDate] = useState('');
   const [blockedBy, setBlockedBy] = useState('');
   const [status, setStatus] = useState('open');
+  const [notes, setNotes] = useState('');
 
   const loadTasks = useCallback(async () => {
     if (!activeProperty) return;
@@ -87,6 +88,7 @@ export default function TasksPage({ activeProperty }) {
     setDueDate('');
     setBlockedBy('');
     setStatus('open');
+    setNotes('');
     setShowAddModal(true);
   };
 
@@ -99,6 +101,7 @@ export default function TasksPage({ activeProperty }) {
     setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
     setBlockedBy(task.blockedBy && task.blockedBy.length > 0 ? task.blockedBy[0] : '');
     setStatus(task.status || 'open');
+    setNotes(task.notes || task.researchNotes || '');
     setShowAddModal(true);
   };
 
@@ -113,7 +116,7 @@ export default function TasksPage({ activeProperty }) {
       category,
       blockedBy: blockedBy ? [blockedBy] : [],
       dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-      notes: editingTask ? editingTask.notes : '',
+      notes: notes,
       source: editingTask ? editingTask.source : 'manual',
     };
     if (editingTask) {
@@ -355,6 +358,17 @@ export default function TasksPage({ activeProperty }) {
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-2xl text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-400">Notes / Research</label>
+                <textarea 
+                  rows="3"
+                  placeholder="e.g. Supplier contact info, dimensions, or research notes."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-2xl text-white text-sm focus:border-blue-500 focus:outline-none transition-colors resize-none"
                 />
               </div>
 
