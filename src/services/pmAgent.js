@@ -129,7 +129,10 @@ Respond with a structured research brief covering ALL of the following sections:
 ## Recommendations
 - Specific product names/models if applicable (e.g., "Kwikset SmartKey" not just "a lock")
 - Why you recommend them (rental-friendly, cost-effective, durable, etc.)
-- Links or search terms to find them
+- Construct clean, clickable search links for Amazon, Home Depot, and/or Target by encoding the query terms. Use this format:
+  * [Search on Amazon](https://www.amazon.com/s?k=Search+Query)
+  * [Search on Home Depot](https://www.homedepot.com/s/Search+Query)
+  * [Search on Target](https://www.target.com/s?searchTerm=Search+Query)
 
 ## Important Considerations
 - Local regulations or code requirements (especially for CA properties)
