@@ -15,6 +15,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [authTrigger, setAuthTrigger] = useState(0);
+  const [chatInitialPrompt, setChatInitialPrompt] = useState('');
 
   // Listen to auth state changes to reload data
   useEffect(() => {
@@ -61,9 +62,21 @@ export default function App() {
       case 'tasks':
         return <TasksPage activeProperty={activeProperty} />;
       case 'receipts':
-        return <ReceiptCapturePage activeProperty={activeProperty} setActiveTab={setActiveTab} />;
+        return (
+          <ReceiptCapturePage 
+            activeProperty={activeProperty} 
+            setActiveTab={setActiveTab} 
+            setChatInitialPrompt={setChatInitialPrompt}
+          />
+        );
       case 'chat':
-        return <ChatPage activeProperty={activeProperty} />;
+        return (
+          <ChatPage 
+            activeProperty={activeProperty} 
+            chatInitialPrompt={chatInitialPrompt}
+            setChatInitialPrompt={setChatInitialPrompt}
+          />
+        );
       case 'ledger':
         return <TransactionsPage activeProperty={activeProperty} />;
       default:

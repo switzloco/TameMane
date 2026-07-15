@@ -1,16 +1,23 @@
-import React from 'react';
-import { CheckCircle2, Circle, AlertCircle, Calendar, Trash2, Edit2, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle2, Circle, AlertCircle, Calendar, Trash2, Edit2, Lock, Sparkles, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { getRelativeTime, formatDate } from '../utils/dateHelpers';
 import { SCHEDULE_E_CATEGORIES } from '../config/constants';
+import { researchTask } from '../services/pmAgent';
+import { dbService } from '../services/dbService';
+import { notifyResearchReady } from '../services/notificationService';
 
-export default function TaskCard({ task, allTasks = [], onToggleStatus, onEdit, onDelete }) {
+export default function TaskCard({ task, allTasks = [], activeProperty, onToggleStatus, onEdit, onDelete }) {
   const isCompleted = task.status === 'completed';
 
   // Find any active blockers
   const activeBlockers = (task.blockedBy || [])
     .map(blockerId => allTasks.find(t => t.id === blockerId))
     .filter(t => t && t.status !== 'completed');
-  const isBlocked = activeBlockers.length > 0;
+  const isBlocked = isCompleted ? false : activeBlockers.length > 0;
+
+  const [researching, setResearching] = useState(false);
+  const [showResearch, setShowResearch] = useState(false);
+  const [researchNotes, setResearchNotes] = useState(task.researchNotes || null);
 
   const priorityColors = {
     critical: 'text-red-400 bg-red-500/10 border-red-500/20',
@@ -20,6 +27,26 @@ export default function TaskCard({ task, allTasks = [], onToggleStatus, onEdit, 
   };
 
   const categoryLabel = SCHEDULE_E_CATEGORIES[task.category]?.label || 'Uncategorized';
+
+  const handleResearch = async () => {
+    if (researchNotes) {
+      setShowResearch(!showResearch);
+      return;
+    }
+    setResearching(true);
+    try {
+      const propertyContext = { activeProperty };
+      const findings = await researchTask(task, propertyContext);
+      setResearchNotes(findings);
+      setShowResearch(true);
+      await dbService.saveTask({ ...task, researchNotes: findings });
+      await notifyResearchReady(task, findings);
+    } catch (err) {
+      console.error('Research failed:', err);
+    } finally {
+      setResearching(false);
+    }
+  };
 
   return (
     <div className={`p-4 rounded-3xl border transition-all ${
@@ -45,7 +72,7 @@ export default function TaskCard({ task, allTasks = [], onToggleStatus, onEdit, 
         </button>
 
         {/* Task Details */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 select-text">
           <h4 className={`text-sm font-semibold tracking-tight text-white ${isCompleted ? 'line-through text-slate-500' : ''} ${isBlocked ? 'text-slate-300' : ''}`}>
             {task.title}
           </h4>
@@ -80,10 +107,38 @@ export default function TaskCard({ task, allTasks = [], onToggleStatus, onEdit, 
               </span>
             )}
           </div>
+
+          {/* Research notes block */}
+          {researchNotes && showResearch && (
+            <div className="mt-3 p-3 bg-slate-800/50 border border-purple-500/20 rounded-2xl text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+              <div className="flex items-center gap-1.5 mb-2 text-purple-400 font-semibold text-[10px] uppercase tracking-wider">
+                <Sparkles size={10} />
+                Research Notes
+              </div>
+              {researchNotes}
+            </div>
+          )}
+          {researchNotes && (
+            <button
+              onClick={() => setShowResearch(!showResearch)}
+              className="flex items-center gap-1 mt-2 text-[10px] text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              {showResearch ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              {showResearch ? 'Hide research' : 'Show research'}
+            </button>
+          )}
         </div>
 
         {/* Action Panel */}
         <div className="flex flex-col gap-2 flex-shrink-0 items-center">
+          <button
+            onClick={handleResearch}
+            disabled={researching}
+            className="text-slate-500 hover:text-purple-400 p-1 rounded-xl active:scale-95 transition-all disabled:opacity-50"
+            title="Research this task"
+          >
+            {researching ? <Loader2 size={15} className="animate-spin text-purple-400" /> : <Sparkles size={15} />}
+          </button>
           <button
             onClick={() => onEdit(task)}
             className="text-slate-500 hover:text-blue-400 p-1 rounded-xl active:scale-95 transition-all"

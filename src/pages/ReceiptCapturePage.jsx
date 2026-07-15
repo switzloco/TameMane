@@ -3,8 +3,9 @@ import { Camera, Upload, AlertCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { parseReceipt } from '../services/visionAgent';
 import { dbService } from '../services/dbService';
 import ReceiptReviewCard from '../components/ReceiptReviewCard';
+import RentReductionPage from './RentReductionPage';
 
-export default function ReceiptCapturePage({ activeProperty, setActiveTab }) {
+export default function ReceiptCapturePage({ activeProperty, setActiveTab, setChatInitialPrompt }) {
   const [image, setImage] = useState(null);
   const [base64, setBase64] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -12,6 +13,16 @@ export default function ReceiptCapturePage({ activeProperty, setActiveTab }) {
   const [error, setError] = useState(null);
 
   const fileInputRef = useRef(null);
+
+  if (activeProperty?.userRole === 'renter') {
+    return (
+      <RentReductionPage 
+        activeProperty={activeProperty} 
+        setActiveTab={setActiveTab} 
+        setChatInitialPrompt={setChatInitialPrompt}
+      />
+    );
+  }
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];

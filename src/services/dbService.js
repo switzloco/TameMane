@@ -9,6 +9,7 @@ const KEYS = {
   PROPERTIES: 'tm_properties',
   TASKS: 'tm_tasks',
   TRANSACTIONS: 'tm_transactions',
+  RENT_REDUCTIONS: 'tm_rent_reductions',
 };
 
 // Initialize localStorage with seeds if empty
@@ -21,6 +22,9 @@ const initDB = () => {
   }
   if (!localStorage.getItem(KEYS.TRANSACTIONS)) {
     localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify([]));
+  }
+  if (!localStorage.getItem(KEYS.RENT_REDUCTIONS)) {
+    localStorage.setItem(KEYS.RENT_REDUCTIONS, JSON.stringify([]));
   }
 };
 
@@ -50,6 +54,7 @@ export const dbService = {
       const localProps = JSON.parse(localStorage.getItem(KEYS.PROPERTIES) || '[]');
       const localTasks = JSON.parse(localStorage.getItem(KEYS.TASKS) || '[]');
       const localTxs = JSON.parse(localStorage.getItem(KEYS.TRANSACTIONS) || '[]');
+      const localReductions = JSON.parse(localStorage.getItem(KEYS.RENT_REDUCTIONS) || '[]');
 
       // Migrate Properties
       for (const prop of localProps) {
@@ -75,6 +80,15 @@ export const dbService = {
         await setDoc(txRef, {
           ...tx,
           updatedAt: tx.updatedAt || new Date().toISOString()
+        });
+      }
+
+      // Migrate Rent Reductions
+      for (const reduction of localReductions) {
+        const ref = doc(db, 'users', userId, 'rent_reductions', reduction.id);
+        await setDoc(ref, {
+          ...reduction,
+          updatedAt: reduction.updatedAt || new Date().toISOString()
         });
       }
 
@@ -346,6 +360,103 @@ export const dbService = {
     const transactions = JSON.parse(localStorage.getItem(KEYS.TRANSACTIONS) || '[]');
     const filtered = transactions.filter(t => t.id !== transactionId);
     localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(filtered));
+    return true;
+  },
+
+  // --- RENT REDUCTIONS ---
+  async getRentReductions(propertyId = null) {
+    if (this.isCloudEnabled()) {
+      try {
+        const colRef = getUserCollection('rent_reductions');
+        const snapshot = await getDocs(colRef);
+        const reductions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        if (propertyId) {
+          return reductions.filter(r => r.propertyId === propertyId);
+        }
+        return reductions;
+      } catch (err) {
+        console.error('Error fetching rent reductions from Firestore, falling back to local:', err);
+      }
+    }
+
+    await delay();
+    const reductions = JSON.parse(localStorage.getItem(KEYS.RENT_REDUCTIONS) || '[]');
+    if (propertyId) {
+      return reductions.filter(r => r.propertyId === propertyId);
+    }
+    return reductions;
+  },
+
+  async saveRentReduction(reduction) {
+    const id = reduction.id || `rr_${Date.now()}`;
+
+    if (this.isCloudEnabled()) {
+      try {
+        const colRef = getUserCollection('rent_reductions');
+        const docRef = doc(colRef, id);
+
+        let existingReduction = {};
+        try {
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            existingReduction = docSnap.data();
+          }
+        } catch (_) {}
+
+        const savedReduction = {
+          ...existingReduction,
+          ...reduction,
+          id,
+          createdAt: reduction.createdAt || existingReduction.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        await setDoc(docRef, savedReduction);
+        return savedReduction;
+      } catch (err) {
+        console.error('Error saving rent reduction to Firestore, saving locally:', err);
+      }
+    }
+
+    await delay();
+    const reductions = JSON.parse(localStorage.getItem(KEYS.RENT_REDUCTIONS) || '[]');
+    const index = reductions.findIndex(r => r.id === id);
+    let savedReduction;
+
+    if (index >= 0) {
+      savedReduction = { ...reductions[index], ...reduction, updatedAt: new Date().toISOString() };
+      reductions[index] = savedReduction;
+    } else {
+      savedReduction = {
+        ...reduction,
+        id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      reductions.push(savedReduction);
+    }
+
+    localStorage.setItem(KEYS.RENT_REDUCTIONS, JSON.stringify(reductions));
+    return savedReduction;
+  },
+
+  async deleteRentReduction(reductionId) {
+    if (this.isCloudEnabled()) {
+      try {
+        const colRef = getUserCollection('rent_reductions');
+        const docRef = doc(colRef, reductionId);
+        await deleteDoc(docRef);
+        return true;
+      } catch (err) {
+        console.error('Error deleting rent reduction from Firestore, deleting locally:', err);
+      }
+    }
+
+    await delay();
+    const reductions = JSON.parse(localStorage.getItem(KEYS.RENT_REDUCTIONS) || '[]');
+    const filtered = reductions.filter(r => r.id !== reductionId);
+    localStorage.setItem(KEYS.RENT_REDUCTIONS, JSON.stringify(filtered));
     return true;
   }
 };

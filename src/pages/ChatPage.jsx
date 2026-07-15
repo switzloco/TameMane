@@ -3,6 +3,7 @@ import { Send, Bot, User, Sparkles, Clipboard, CheckCircle, ImagePlus, X } from 
 import { sendPMMessage } from '../services/pmAgent';
 import { dbService } from '../services/dbService';
 import { formatCurrency } from '../utils/formatCurrency';
+import { notifyTaskCompleted, notifyResearchReady } from '../services/notificationService';
 
 const renderMessageText = (text) => {
   if (!text) return null;
@@ -57,7 +58,7 @@ const renderMessageText = (text) => {
   });
 };
 
-export default function ChatPage({ activeProperty }) {
+export default function ChatPage({ activeProperty, chatInitialPrompt, setChatInitialPrompt }) {
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
@@ -72,6 +73,17 @@ export default function ChatPage({ activeProperty }) {
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Handle auto-drafting redirect from adjustments page
+  useEffect(() => {
+    if (chatInitialPrompt && chatInitialPrompt.trim()) {
+      const promptToSend = chatInitialPrompt;
+      setChatInitialPrompt('');
+      setInputText('');
+      setAttachments([]);
+      sendMessage(promptToSend, []);
+    }
+  }, [chatInitialPrompt]);
 
   // Load chat history when active property changes
   useEffect(() => {
@@ -146,37 +158,34 @@ export default function ChatPage({ activeProperty }) {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if ((!inputText.trim() && attachments.length === 0) || sending) return;
+  const sendMessage = async (text, files = []) => {
+    if ((!text.trim() && files.length === 0) || sending) return;
 
-    const userText = inputText;
-    const userImages = attachments;
-    setInputText('');
-    setAttachments([]);
     setSending(true);
 
     // Add user message to UI
     const newUserMsg = {
       id: `msg_${Date.now()}_user`,
       role: 'user',
-      text: userText,
-      images: userImages.length > 0 ? userImages : undefined,
+      text,
+      images: files.length > 0 ? files : undefined,
       timestamp: Date.now()
     };
     setMessages(prev => [...prev, newUserMsg]);
 
     try {
       // 1. Gather live context
-      const [tasks, transactions] = await Promise.all([
+      const [tasks, transactions, rentReductions] = await Promise.all([
         dbService.getTasks(activeProperty.id),
-        dbService.getTransactions(activeProperty.id)
+        dbService.getTransactions(activeProperty.id),
+        dbService.getRentReductions ? dbService.getRentReductions(activeProperty.id) : Promise.resolve([])
       ]);
 
       const portfolioContext = {
         activeProperty,
         openTasks: tasks.filter(t => t.status !== 'completed'),
-        recentTransactions: transactions.slice(0, 15) // limit to recent ones for context efficiency
+        recentTransactions: transactions.slice(0, 15), // limit to recent ones for context efficiency
+        rentReductions: rentReductions || []
       };
 
       // 2. Fetch history (limit context window payload to 48 hours & max 15 messages)
@@ -187,7 +196,7 @@ export default function ChatPage({ activeProperty }) {
         .map(m => ({ role: m.role, text: m.text }));
 
       // 3. Send message to agent (with any attached images)
-      const response = await sendPMMessage(userText, portfolioContext, history, userImages);
+      const response = await sendPMMessage(text, portfolioContext, history, files);
 
       // 4. Append model text response
       const modelMsgId = `msg_${Date.now()}_model`;
@@ -196,7 +205,7 @@ export default function ChatPage({ activeProperty }) {
       // 5. Handle action execution
       if (response.actions && response.actions.length > 0) {
         for (const act of response.actions) {
-          await executeAgentAction(act, userImages);
+          await executeAgentAction(act, files);
         }
       }
     } catch (err) {
@@ -213,6 +222,15 @@ export default function ChatPage({ activeProperty }) {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    const text = inputText;
+    const files = attachments;
+    setInputText('');
+    setAttachments([]);
+    await sendMessage(text, files);
   };
 
   const executeAgentAction = async (actionBlock, currentAttachments = []) => {
@@ -270,6 +288,25 @@ export default function ChatPage({ activeProperty }) {
               timestamp: Date.now()
             }
           ]);
+
+          if (isCompleted && activeProperty) {
+            try {
+              const allTasks = await dbService.getTasks(activeProperty.id);
+              const nowUnblocked = allTasks.filter(t => {
+                if (t.status === 'completed') return false;
+                if (!t.blockedBy || !t.blockedBy.includes(updated.id)) return false;
+                const remainingBlockers = t.blockedBy.filter(bid => {
+                  if (bid === updated.id) return false;
+                  const blocker = allTasks.find(bt => bt.id === bid);
+                  return blocker && blocker.status !== 'completed';
+                });
+                return remainingBlockers.length === 0;
+              });
+              await notifyTaskCompleted(updated, nowUnblocked);
+            } catch (err) {
+              console.error('Failed to notify task completion:', err);
+            }
+          }
         }
       } else if (type === 'create_transaction') {
         const txPayload = actionBlock.transaction || actionBlock;
@@ -298,6 +335,34 @@ export default function ChatPage({ activeProperty }) {
             timestamp: Date.now()
           }
         ]);
+      } else if (type === 'research_task') {
+        const taskId = actionBlock.taskId;
+        const findings = actionBlock.findings;
+        if (taskId && findings) {
+          try {
+            const allTasks = await dbService.getTasks(activeProperty.id);
+            const task = allTasks.find(t => t.id === taskId);
+            if (task) {
+              await dbService.saveTask({ ...task, researchNotes: findings });
+              await notifyResearchReady(task, findings);
+            } else {
+              await dbService.saveTask({ id: taskId, researchNotes: findings });
+            }
+
+            setMessages(prev => [
+              ...prev,
+              {
+                id: `sys_${Date.now()}_research_${taskId}`,
+                role: 'model',
+                isSystem: true,
+                text: `🔍 Research saved to task. View it on the task card.`,
+                timestamp: Date.now()
+              }
+            ]);
+          } catch (err) {
+            console.error('Failed to execute research_task action:', err);
+          }
+        }
       }
     } catch (actionErr) {
       console.error('Failed to execute agent action:', actionErr);

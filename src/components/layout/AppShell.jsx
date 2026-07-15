@@ -4,7 +4,8 @@ import {
   CheckSquare, 
   Camera, 
   MessageSquare, 
-  DollarSign 
+  DollarSign,
+  FileText
 } from 'lucide-react';
 import PropertySwitcher from './PropertySwitcher';
 import SyncStatus from '../sync/SyncStatus';
@@ -17,10 +18,11 @@ export default function AppShell({
   activeProperty, 
   setActiveProperty 
 }) {
+  const isRenter = activeProperty?.userRole === 'renter';
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-    { id: 'receipts', label: 'Receipts', icon: Camera },
+    { id: 'receipts', label: isRenter ? 'Adjustments' : 'Receipts', icon: isRenter ? FileText : Camera },
     { id: 'chat', label: 'PM Chat', icon: MessageSquare },
     { id: 'ledger', label: 'Ledger', icon: DollarSign },
   ];

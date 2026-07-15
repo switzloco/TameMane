@@ -4,6 +4,7 @@ import TaskCard from '../components/TaskCard';
 import { dbService } from '../services/dbService';
 import { SCHEDULE_E_CATEGORIES } from '../config/constants';
 import { sortTasks } from '../utils/taskSorter';
+import { notifyTaskCompleted } from '../services/notificationService';
 
 export default function TasksPage({ activeProperty }) {
   const [tasks, setTasks] = useState([]);
@@ -40,12 +41,33 @@ export default function TasksPage({ activeProperty }) {
   }, [loadTasks]);
 
   const handleToggleStatus = async (task) => {
+    const isNowCompleted = task.status !== 'completed';
     const updatedTask = {
       ...task,
-      status: task.status === 'completed' ? 'open' : 'completed',
-      completedDate: task.status === 'completed' ? null : new Date().toISOString()
+      status: isNowCompleted ? 'completed' : 'open',
+      completedDate: isNowCompleted ? new Date().toISOString() : null
     };
     await dbService.saveTask(updatedTask);
+
+    if (isNowCompleted && activeProperty) {
+      try {
+        const allTasks = await dbService.getTasks(activeProperty.id);
+        const nowUnblocked = allTasks.filter(t => {
+          if (t.status === 'completed') return false;
+          if (!t.blockedBy || !t.blockedBy.includes(task.id)) return false;
+          const remainingBlockers = t.blockedBy.filter(bid => {
+            if (bid === task.id) return false;
+            const blocker = allTasks.find(bt => bt.id === bid);
+            return blocker && blocker.status !== 'completed';
+          });
+          return remainingBlockers.length === 0;
+        });
+        await notifyTaskCompleted(updatedTask, nowUnblocked);
+      } catch (err) {
+        console.error('Failed to notify task completion:', err);
+      }
+    }
+
     loadTasks();
   };
 
@@ -220,6 +242,7 @@ export default function TasksPage({ activeProperty }) {
               key={task.id} 
               task={task} 
               allTasks={tasks}
+              activeProperty={activeProperty}
               onToggleStatus={handleToggleStatus}
               onEdit={handleOpenEditModal}
               onDelete={handleDeleteTask}

@@ -17,6 +17,15 @@ export const SCHEDULE_E_CATEGORIES = {
   rental_income: { label: 'Rental Income', line: 3, isIncome: true, color: '#34d399' },
 };
 
+export const RENT_REDUCTION_REASONS = {
+  repair_issue: { label: 'Unresolved Repair Issue', color: '#f472b6' },
+  habitability: { label: 'Habitability Outage (Water/Heat/etc)', color: '#fb923c' },
+  amenity_outage: { label: 'Amenity Outage (Pool/Gym/etc)', color: '#a78bfa' },
+  landlord_agreement: { label: 'Landlord-Agreed Discount', color: '#34d399' },
+  out_of_pocket: { label: 'Paid Maintenance Out-of-Pocket', color: '#60a5fa' },
+  other: { label: 'Other Adjustment', color: '#e5e7eb' }
+};
+
 export const PROPERTY_SEEDS = [
   {
     id: '3060_quinto',
@@ -29,6 +38,7 @@ export const PROPERTY_SEEDS = [
     },
     status: 'active',
     monthlyRent: 4800,
+    userRole: 'landlord',
     createdAt: new Date().toISOString()
   },
   {
@@ -42,6 +52,7 @@ export const PROPERTY_SEEDS = [
     },
     status: 'vacant',
     monthlyRent: 0,
+    userRole: 'renter',
     createdAt: new Date().toISOString()
   },
   {
@@ -55,6 +66,7 @@ export const PROPERTY_SEEDS = [
     },
     status: 'active',
     monthlyRent: 1550,
+    userRole: 'landlord',
     createdAt: new Date().toISOString()
   }
 ];

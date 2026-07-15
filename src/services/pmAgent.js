@@ -79,8 +79,98 @@ DIRECTIONS:
     - Describe briefly what you see, then take the relevant actions. Never ignore an attached image.
 14. MONEY MENTIONED WITHOUT ENOUGH DETAIL: If the user mentions spending money, buying something, or paying for a service (e.g., "picked up a new fridge", "paid the plumber today", "bought supplies for the cleanout") but has NOT given you enough to log it accurately — missing the amount and/or vendor, and no receipt image is attached — do NOT invent or guess numbers and do NOT emit a "create_transaction" action yet. Instead, ask a short, direct follow-up question for the missing amount/vendor, and ask if they have a receipt photo to attach for the record. Once they reply with the amount (with or without a photo), emit the "create_transaction" action.
 15. If a receipt image is attached AND the user's text already gives you the amount/vendor, or the receipt image itself makes them legible, go ahead and log the "create_transaction" action immediately — don't ask for information that's already visible in the photo.
+16. DRAFTING RENT ADJUSTMENT/DEDUCTION MESSAGES: If the user asks to draft a message (email, text, etc.) to their landlord explaining a rent reduction/deduction/adjustment:
+    - Inspect the 'rentReductions' array in the portfolio context or use the details provided in the user message.
+    - Draft a highly professional, polite, and clear email and text message that the tenant can send to their landlord.
+    - Include the exact month, deduction amount, reason category, and details/memo explaining the deduction.
+    - If there is an associated photo/invoice, explicitly mention in the drafts that a receipt/invoice photo is attached to support the adjustment.
+    - Format both drafts clearly (with subject lines for email) so they are easy to copy and paste.
+17. RESEARCH INTENT: If the user asks for help, advice, tips, research, "how do I", "what's the best way to", or similar about a SPECIFIC task (e.g., "help me with the lock task", "research the garage door issue", "how should I handle the address update"), do the following:
+    - Identify the matching task from openTasks by title/description.
+    - Provide a thorough, actionable research response covering: estimated cost range (DIY vs professional), step-by-step approach, specific product/service recommendations with reasoning, and any important regulatory or local considerations.
+    - Emit a "research_task" action so the findings are saved to the task record for future reference.
+    - Example action:
+      { "type": "research_task", "taskId": "actual_task_id", "findings": "Your full research response text here" }
+18. TASK BATCHING: If you notice 3 or more open tasks that share a common verb/action AND location (e.g., "Move tools from Union", "Move rug from Union", "Move chest from Union"), proactively suggest batching them: "I notice you have 3 move tasks from Union. Want me to consolidate these into a single trip task with subtasks?" If the user agrees, emit "create_task" for the parent and "update_task" on each child to set blockedBy to the parent, or mark the originals completed and create fresh subtasks under the parent.
+19. AUTO-SUBTASK OFFERS: For "meta-tasks" — tasks that are broad, multi-step, or procedural (e.g., "Update official property address", "Clean out property", "Organize kitchen") — proactively offer to break them into concrete subtasks. Say: "This task has several steps. Want me to break it down into individual subtasks you can check off?" If the user agrees, emit multiple "create_task" actions for each subtask, each with blockedBy set to the parent task's ID if ordering matters. Example: "Update official property address" → subtasks for USPS, DMV, insurance, bank, employer, subscriptions, etc.
+
 
 `;
+
+/**
+ * Research-focused prompt template for deep-dive task analysis.
+ * Used by researchTask() — called from the ✨ button on TaskCard or detected via chat intent.
+ * Uses a cheaper/faster model (gemini-2.0-flash) since research doesn't need heavy reasoning.
+ */
+const RESEARCH_PROMPT_TEMPLATE = `You are a property management research assistant for a rental portfolio owner.
+You are given a specific maintenance task and the property context. Provide a thorough, actionable research brief.
+
+PROPERTY CONTEXT:
+{propertyContext}
+
+TASK TO RESEARCH:
+Title: {taskTitle}
+Description: {taskDescription}
+Category: {taskCategory}
+Priority: {taskPriority}
+
+Respond with a structured research brief covering ALL of the following sections:
+
+## Cost Estimate
+- DIY cost range (materials only)
+- Professional/hired cost range
+- Where to buy materials or find services
+
+## Step-by-Step Approach
+- Numbered steps the owner can follow
+- Call out any steps that need a professional vs DIY
+- Time estimate for each step
+
+## Recommendations
+- Specific product names/models if applicable (e.g., "Kwikset SmartKey" not just "a lock")
+- Why you recommend them (rental-friendly, cost-effective, durable, etc.)
+- Links or search terms to find them
+
+## Important Considerations
+- Local regulations or code requirements (especially for CA properties)
+- Landlord vs tenant responsibility
+- Tax implications (is this a repair or capital improvement for Schedule E?)
+- Safety concerns
+- Timing considerations (best time to do this, any deadlines)
+
+Keep your response concise but thorough. Use bullet points. Be specific — real brand names, real price ranges, real steps. Do not be vague or generic.`;
+
+/**
+ * Performs deep research on a specific task.
+ * Called from the ✨ button on TaskCard or when the PM agent detects research intent in chat.
+ *
+ * @param {object} task - The task to research { title, description, category, priority }
+ * @param {object} propertyContext - The active property context
+ * @returns {Promise<string>} The research findings as formatted text
+ */
+export async function researchTask(task, propertyContext) {
+  try {
+    // Use Flash for research — cheaper and fast enough for this use case
+    const model = getModel('gemini-2.0-flash');
+
+    const prompt = RESEARCH_PROMPT_TEMPLATE
+      .replace('{propertyContext}', JSON.stringify(propertyContext, null, 2))
+      .replace('{taskTitle}', task.title || '')
+      .replace('{taskDescription}', task.description || '')
+      .replace('{taskCategory}', task.category || 'other')
+      .replace('{taskPriority}', task.priority || 'medium');
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    });
+
+    return result.response.text();
+  } catch (error) {
+    console.error('Research task error:', error);
+    throw new Error(`Failed to research task: ${error.message}`);
+  }
+}
+
 
 /**
  * Converts a data URL / base64 string into a Gemini inlineData part.
