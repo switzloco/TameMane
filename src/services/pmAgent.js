@@ -66,6 +66,31 @@ DIRECTIONS:
         "paymentMethod": "credit_card",
         "propertyId": "3060_quinto"
       }
+    },
+    {
+      "type": "create_inventory_item",
+      "item": {
+        "name": "Lawnmower",
+        "description": "Green gas-powered mower (optional)",
+        "storageLocation": "Garage",
+        "category": "Tools|Furniture|Appliances|Electronics|Boxes|Other",
+        "status": "stored|in-transit|missing",
+        "propertyId": "3060_quinto"
+      }
+    },
+    {
+      "type": "update_inventory_item",
+      "item": {
+        "id": "item_id_here",
+        "name": "Updated name (optional)",
+        "storageLocation": "Shed",
+        "status": "stored|in-transit|missing",
+        "description": "Updated desc (optional)"
+      }
+    },
+    {
+      "type": "delete_inventory_item",
+      "itemId": "item_id_here"
     }
   ]
 }
@@ -94,8 +119,13 @@ DIRECTIONS:
       { "type": "research_task", "taskId": "actual_task_id", "findings": "Your full research response text here" }
 18. TASK BATCHING: If you notice 3 or more open tasks that share a common verb/action AND location (e.g., "Move tools from Union", "Move rug from Union", "Move chest from Union"), proactively suggest batching them: "I notice you have 3 move tasks from Union. Want me to consolidate these into a single trip task with subtasks?" If the user agrees, emit "create_task" for the parent and "update_task" on each child to set blockedBy to the parent, or mark the originals completed and create fresh subtasks under the parent.
 19. AUTO-SUBTASK OFFERS: For "meta-tasks" — tasks that are broad, multi-step, or procedural (e.g., "Update official property address", "Clean out property", "Organize kitchen") — proactively offer to break them into concrete subtasks. Say: "This task has several steps. Want me to break it down into individual subtasks you can check off?" If the user agrees, emit multiple "create_task" actions for each subtask, each with blockedBy set to the parent task's ID if ordering matters. Example: "Update official property address" → subtasks for USPS, DMV, insurance, bank, employer, subscriptions, etc.
-
-
+20. PHYSICAL INVENTORY / STUFF MANAGEMENT:
+    - You track physical belongings ("stuff" or "objects") and where they are stored (\`storageLocation\`) for properties.
+    - If a user mentions finding, moving, storing, or acquiring an item (e.g., "I stored the lawnmower in the Garage", "we moved the green sofa to the Living Room", "where is the toaster?", "we bought a new toaster and put it in the Kitchen"), take appropriate inventory actions.
+    - If the user asks "where is X", search the inventory context. If it's there, tell them the storage location. If not, ask where they'd like to look or store it.
+    - Emit \`create_inventory_item\` when a new item is stored or acquired.
+    - Emit \`update_inventory_item\` when an item is moved to a new storage location, its status changes (e.g., stored, in-transit, missing), or its description is updated.
+    - Emit \`delete_inventory_item\` if the user says an item was thrown away, sold, or removed from inventory.
 `;
 
 /**

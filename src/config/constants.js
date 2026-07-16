@@ -133,3 +133,40 @@ export const TASK_SEEDS = [
     updatedAt: new Date().toISOString()
   }
 ];
+
+export const INVENTORY_SEEDS = [
+  {
+    id: 'inv_1',
+    propertyId: '137_union',
+    name: 'Dining Table',
+    description: 'Solid oak dining table with 6 chairs',
+    storageLocation: 'Dining Room',
+    category: 'Furniture',
+    status: 'stored',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'inv_2',
+    propertyId: '137_union',
+    name: 'Moving Boxes',
+    description: '10 medium cardboard boxes containing kitchenware',
+    storageLocation: 'Garage',
+    category: 'Boxes',
+    status: 'stored',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'inv_3',
+    propertyId: '3060_quinto',
+    name: 'Patio Set',
+    description: 'Outdoor table, 4 chairs, and umbrella',
+    storageLocation: 'Backyard',
+    category: 'Furniture',
+    status: 'stored',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+

@@ -5,6 +5,7 @@ import TasksPage from './pages/TasksPage';
 import TransactionsPage from './pages/TransactionsPage';
 import ReceiptCapturePage from './pages/ReceiptCapturePage';
 import ChatPage from './pages/ChatPage';
+import InventoryPage from './pages/InventoryPage';
 import { dbService } from './services/dbService';
 import { auth } from './config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -79,6 +80,8 @@ export default function App() {
         );
       case 'ledger':
         return <TransactionsPage activeProperty={activeProperty} />;
+      case 'inventory':
+        return <InventoryPage activeProperty={activeProperty} />;
       default:
         return <DashboardPage activeProperty={activeProperty} setActiveTab={setActiveTab} />;
     }

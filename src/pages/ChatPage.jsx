@@ -175,17 +175,19 @@ export default function ChatPage({ activeProperty, chatInitialPrompt, setChatIni
 
     try {
       // 1. Gather live context
-      const [tasks, transactions, rentReductions] = await Promise.all([
+      const [tasks, transactions, rentReductions, inventory] = await Promise.all([
         dbService.getTasks(activeProperty.id),
         dbService.getTransactions(activeProperty.id),
-        dbService.getRentReductions ? dbService.getRentReductions(activeProperty.id) : Promise.resolve([])
+        dbService.getRentReductions ? dbService.getRentReductions(activeProperty.id) : Promise.resolve([]),
+        dbService.getInventory ? dbService.getInventory(activeProperty.id) : Promise.resolve([])
       ]);
 
       const portfolioContext = {
         activeProperty,
         openTasks: tasks.filter(t => t.status !== 'completed'),
         recentTransactions: transactions.slice(0, 15), // limit to recent ones for context efficiency
-        rentReductions: rentReductions || []
+        rentReductions: rentReductions || [],
+        inventory: inventory || []
       };
 
       // 2. Fetch history (limit context window payload to 48 hours & max 15 messages)
@@ -362,6 +364,56 @@ export default function ChatPage({ activeProperty, chatInitialPrompt, setChatIni
           } catch (err) {
             console.error('Failed to execute research_task action:', err);
           }
+        }
+      } else if (type === 'create_inventory_item') {
+        const itemPayload = actionBlock.item || actionBlock;
+        const seedItem = {
+          ...itemPayload,
+          propertyId: activeProperty.id,
+          status: itemPayload.status || 'stored',
+          category: itemPayload.category || 'Other',
+          storageLocation: itemPayload.storageLocation || 'Unknown'
+        };
+        const created = await dbService.saveInventoryItem(seedItem);
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `sys_${Date.now()}_inv_${created.id}`,
+            role: 'model',
+            isSystem: true,
+            text: `📦 Item logged: "${created.name}" stored in "${created.storageLocation}".`,
+            timestamp: Date.now()
+          }
+        ]);
+      } else if (type === 'update_inventory_item') {
+        const itemPayload = actionBlock.item || actionBlock;
+        if (itemPayload.id) {
+          const updated = await dbService.saveInventoryItem(itemPayload);
+          setMessages(prev => [
+            ...prev,
+            {
+              id: `sys_${Date.now()}_inv_update_${updated.id}`,
+              role: 'model',
+              isSystem: true,
+              text: `📦 Item updated: "${updated.name}" (Location: ${updated.storageLocation || 'unchanged'}, Status: ${updated.status || 'unchanged'}).`,
+              timestamp: Date.now()
+            }
+          ]);
+        }
+      } else if (type === 'delete_inventory_item') {
+        const itemId = actionBlock.itemId || actionBlock.id;
+        if (itemId) {
+          await dbService.deleteInventoryItem(itemId);
+          setMessages(prev => [
+            ...prev,
+            {
+              id: `sys_${Date.now()}_inv_del_${itemId}`,
+              role: 'model',
+              isSystem: true,
+              text: `📦 Item removed from inventory.`,
+              timestamp: Date.now()
+            }
+          ]);
         }
       }
     } catch (actionErr) {

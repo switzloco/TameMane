@@ -6,7 +6,8 @@ import {
   MessageSquare, 
   DollarSign,
   FileText,
-  Settings
+  Settings,
+  Package
 } from 'lucide-react';
 import PropertySwitcher from './PropertySwitcher';
 import SyncStatus from '../sync/SyncStatus';
@@ -28,6 +29,7 @@ export default function AppShell({
     { id: 'receipts', label: isRenter ? 'Adjustments' : 'Receipts', icon: isRenter ? FileText : Camera },
     { id: 'chat', label: 'PM Chat', icon: MessageSquare },
     { id: 'ledger', label: 'Ledger', icon: DollarSign },
+    { id: 'inventory', label: 'Inventory', icon: Package },
   ];
 
   return (

@@ -1,4 +1,4 @@
-import { PROPERTY_SEEDS, TASK_SEEDS } from '../config/constants';
+import { PROPERTY_SEEDS, TASK_SEEDS, INVENTORY_SEEDS } from '../config/constants';
 import { sortTasks } from '../utils/taskSorter';
 import { collection, doc, getDocs, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -10,6 +10,7 @@ const KEYS = {
   TASKS: 'tm_tasks',
   TRANSACTIONS: 'tm_transactions',
   RENT_REDUCTIONS: 'tm_rent_reductions',
+  INVENTORY: 'tm_inventory',
 };
 
 // Initialize localStorage with seeds if empty
@@ -25,6 +26,9 @@ const initDB = () => {
   }
   if (!localStorage.getItem(KEYS.RENT_REDUCTIONS)) {
     localStorage.setItem(KEYS.RENT_REDUCTIONS, JSON.stringify([]));
+  }
+  if (!localStorage.getItem(KEYS.INVENTORY)) {
+    localStorage.setItem(KEYS.INVENTORY, JSON.stringify(INVENTORY_SEEDS));
   }
 };
 
@@ -55,6 +59,7 @@ export const dbService = {
       const localTasks = JSON.parse(localStorage.getItem(KEYS.TASKS) || '[]');
       const localTxs = JSON.parse(localStorage.getItem(KEYS.TRANSACTIONS) || '[]');
       const localReductions = JSON.parse(localStorage.getItem(KEYS.RENT_REDUCTIONS) || '[]');
+      const localInventory = JSON.parse(localStorage.getItem(KEYS.INVENTORY) || '[]');
 
       // Migrate Properties
       for (const prop of localProps) {
@@ -89,6 +94,15 @@ export const dbService = {
         await setDoc(ref, {
           ...reduction,
           updatedAt: reduction.updatedAt || new Date().toISOString()
+        });
+      }
+
+      // Migrate Inventory
+      for (const item of localInventory) {
+        const ref = doc(db, 'users', userId, 'inventory', item.id);
+        await setDoc(ref, {
+          ...item,
+          updatedAt: item.updatedAt || new Date().toISOString()
         });
       }
 
@@ -457,6 +471,116 @@ export const dbService = {
     const reductions = JSON.parse(localStorage.getItem(KEYS.RENT_REDUCTIONS) || '[]');
     const filtered = reductions.filter(r => r.id !== reductionId);
     localStorage.setItem(KEYS.RENT_REDUCTIONS, JSON.stringify(filtered));
+    return true;
+  },
+
+  // --- INVENTORY ---
+  async getInventory(propertyId = null) {
+    if (this.isCloudEnabled()) {
+      try {
+        const colRef = getUserCollection('inventory');
+        const snapshot = await getDocs(colRef);
+        let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Seed if empty
+        if (items.length === 0) {
+          console.log('Cloud inventory empty. Seeding inventory in Firestore...');
+          for (const item of INVENTORY_SEEDS) {
+            await this.saveInventoryItem(item);
+          }
+          items = INVENTORY_SEEDS;
+        }
+
+        if (propertyId) {
+          return items.filter(item => item.propertyId === propertyId);
+        }
+        return items;
+      } catch (err) {
+        console.error('Error fetching inventory from Firestore, falling back to local:', err);
+      }
+    }
+
+    await delay();
+    const items = JSON.parse(localStorage.getItem(KEYS.INVENTORY) || '[]');
+    if (propertyId) {
+      return items.filter(item => item.propertyId === propertyId);
+    }
+    return items;
+  },
+
+  async saveInventoryItem(item) {
+    const id = item.id || `inv_${Date.now()}`;
+
+    if (this.isCloudEnabled()) {
+      try {
+        const colRef = getUserCollection('inventory');
+        const docRef = doc(colRef, id);
+
+        let existingItem = {};
+        try {
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            existingItem = docSnap.data();
+          }
+        } catch (_) {}
+
+        const savedItem = {
+          ...existingItem,
+          ...item,
+          id,
+          createdAt: item.createdAt || existingItem.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        await setDoc(docRef, savedItem);
+        return savedItem;
+      } catch (err) {
+        console.error('Error saving inventory item to Firestore, saving locally:', err);
+      }
+    }
+
+    await delay();
+    const items = JSON.parse(localStorage.getItem(KEYS.INVENTORY) || '[]');
+    const index = items.findIndex(t => t.id === id);
+    let savedItem;
+
+    if (index >= 0) {
+      savedItem = { 
+        ...items[index], 
+        ...item, 
+        updatedAt: new Date().toISOString() 
+      };
+      items[index] = savedItem;
+    } else {
+      savedItem = {
+        ...item,
+        id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      items.push(savedItem);
+    }
+
+    localStorage.setItem(KEYS.INVENTORY, JSON.stringify(items));
+    return savedItem;
+  },
+
+  async deleteInventoryItem(itemId) {
+    if (this.isCloudEnabled()) {
+      try {
+        const colRef = getUserCollection('inventory');
+        const docRef = doc(colRef, itemId);
+        await deleteDoc(docRef);
+        return true;
+      } catch (err) {
+        console.error('Error deleting inventory item from Firestore, deleting locally:', err);
+      }
+    }
+
+    await delay();
+    const items = JSON.parse(localStorage.getItem(KEYS.INVENTORY) || '[]');
+    const filtered = items.filter(t => t.id !== itemId);
+    localStorage.setItem(KEYS.INVENTORY, JSON.stringify(filtered));
     return true;
   }
 };
