@@ -430,7 +430,7 @@ export default function ChatPage({ activeProperty, chatInitialPrompt, setChatIni
           
           if (msg.isSystem) {
             return (
-              <div key={msg.id} className="flex justify-center my-1 animate-slide-up">
+              <div key={msg.id} className="flex justify-center my-1 animate-slide-up select-text">
                 <span className="px-3 py-1 text-[10px] font-semibold bg-blue-950/40 border border-blue-900/30 text-blue-300 rounded-full">
                   {msg.text}
                 </span>
@@ -455,7 +455,7 @@ export default function ChatPage({ activeProperty, chatInitialPrompt, setChatIni
               </div>
 
               {/* Message Bubble */}
-              <div className={`p-3.5 rounded-3xl text-sm leading-relaxed ${
+              <div className={`p-3.5 rounded-3xl text-sm leading-relaxed select-text ${
                 isModel
                   ? 'bg-dark-card border border-dark-border text-slate-100 rounded-tl-none'
                   : 'bg-blue-600 text-white rounded-tr-none shadow-lg shadow-blue-600/15'
