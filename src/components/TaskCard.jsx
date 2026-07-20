@@ -35,7 +35,8 @@ export default function TaskCard({ task, allTasks = [], activeProperty, onToggle
     }
     setResearching(true);
     try {
-      const propertyContext = { activeProperty };
+      const inventory = await dbService.getInventory(activeProperty.id);
+      const propertyContext = { activeProperty, inventory };
       const findings = await researchTask(task, propertyContext);
       setResearchNotes(findings);
       setShowResearch(true);

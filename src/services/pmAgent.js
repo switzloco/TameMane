@@ -126,6 +126,9 @@ DIRECTIONS:
     - Emit \`create_inventory_item\` when a new item is stored or acquired.
     - Emit \`update_inventory_item\` when an item is moved to a new storage location, its status changes (e.g., stored, in-transit, missing), or its description is updated.
     - Emit \`delete_inventory_item\` if the user says an item was thrown away, sold, or removed from inventory.
+21. INVENTORY DUPLICATES CHECK:
+    - Before recommending the purchase of any tool, appliance, material, or supply (e.g. hammer, paint, box, microwave), check the 'inventory' context.
+    - If a matching/relevant item is already in the inventory for the property, alert the user (e.g., "Don't buy that cuz you already have one!"). Point out the existing item and its storage location.
 `;
 
 /**
@@ -152,6 +155,7 @@ Respond with a structured research brief covering ALL of the following sections:
 - DIY cost range (materials only)
 - Professional/hired cost range
 - Where to buy materials or find services
+- **Inventory Check**: Check the 'inventory' list inside 'PROPERTY CONTEXT'. If the user already has relevant supplies, tools, or spare parts (e.g. paint, hammer, extra bulbs) at the property, alert them and recommend using the existing items instead of buying new ones.
 
 ## Step-by-Step Approach
 - Numbered steps the owner can follow
